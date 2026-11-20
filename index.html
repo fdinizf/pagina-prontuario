@@ -1,0 +1,1425 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Resumos em Áudio • Player de Estudos</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+          },
+          colors: {
+            brand: {
+              50: '#fdf2f8',
+              100: '#fce7f3',
+              200: '#fbcfe8',
+              300: '#f9a8d4',
+              400: '#f472b6',
+              500: '#ec4899',
+              600: '#db2777',
+              700: '#be185d',
+            }
+          }
+        }
+      }
+    };
+  </script>
+  <style>
+    /* Custom scrollbar */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(148, 163, 184, 0.3);
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(148, 163, 184, 0.5);
+    }
+
+    /* Piggy animation when playing */
+    @keyframes pigBounce {
+      0%, 100% {
+        transform: translate(-50%, -50%) rotate(-5deg) scale(1.04);
+      }
+      50% {
+        transform: translate(-50%, -56%) rotate(5deg) scale(1.08);
+      }
+    }
+
+    .piggy-playing {
+      animation: pigBounce 0.75s ease-in-out infinite;
+    }
+
+    .piggy-paused {
+      transform: translate(-50%, -50%) rotate(0deg) scale(1);
+      transition: transform 0.2s ease;
+    }
+
+    /* Prevent text selection while scrubbing */
+    .no-select {
+      user-select: none;
+      -webkit-user-select: none;
+    }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100 min-h-screen flex flex-col font-sans transition-colors duration-200 pb-44 md:pb-36">
+
+  <!-- Top Header -->
+  <header class="sticky top-0 z-30 bg-white/85 dark:bg-slate-900/85 backdrop-blur-md border-b border-slate-200 dark:border-slate-800">
+    <div class="max-w-6xl mx-auto px-4 py-3.5 flex flex-wrap items-center justify-between gap-3">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-2xl bg-gradient-to-br from-pink-400 to-rose-500 flex items-center justify-center shadow-md shadow-pink-500/20 text-white">
+          <!-- Mini Piggy Logo -->
+          <svg class="w-7 h-7" viewBox="0 0 64 64" fill="none">
+            <path d="M14 22C9 14 14 8 22 14" fill="#F472B6" stroke="#831843" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M50 22C55 14 50 8 42 14" fill="#F472B6" stroke="#831843" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+            <circle cx="32" cy="34" r="22" fill="#FBCFE8" stroke="#831843" stroke-width="3"/>
+            <circle cx="24" cy="29" r="2.8" fill="#831843"/>
+            <circle cx="40" cy="29" r="2.8" fill="#831843"/>
+            <ellipse cx="32" cy="39" rx="9" ry="6.5" fill="#F472B6" stroke="#831843" stroke-width="2.5"/>
+            <circle cx="29" cy="39" r="1.8" fill="#831843"/>
+            <circle cx="35" cy="39" r="1.8" fill="#831843"/>
+          </svg>
+        </div>
+        <div>
+          <h1 class="text-lg font-bold tracking-tight leading-tight flex items-center gap-2">
+            Resumos em Áudio
+            <span id="total-progress-badge" class="text-xs font-semibold px-2 py-0.5 rounded-full bg-pink-500/15 text-pink-600 dark:text-pink-400">
+              0% concluído
+            </span>
+          </h1>
+          <p class="text-xs text-slate-500 dark:text-slate-400">Player inteligente para revisão médica</p>
+        </div>
+      </div>
+
+      <!-- Search & Controls -->
+      <div class="flex items-center gap-2 w-full sm:w-auto">
+        <div class="relative flex-1 sm:w-64">
+          <svg class="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35m0 0A7.5 7.5 0 104.5 4.5a7.5 7.5 0 0012.15 12.15z"/>
+          </svg>
+          <input
+            id="search-input"
+            type="text"
+            placeholder="Buscar tema, SP ou aula..."
+            class="w-full pl-9 pr-8 py-2 text-sm rounded-xl bg-slate-100 dark:bg-slate-800 border border-transparent focus:border-pink-500 focus:bg-white dark:focus:bg-slate-900 focus:outline-none transition"
+          />
+          <button id="clear-search-btn" class="hidden absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-xs font-bold">✕</button>
+        </div>
+
+        <button
+          id="filter-unwatched-btn"
+          title="Ocultar episódios já concluídos"
+          class="px-3 py-2 rounded-xl text-xs font-medium bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition whitespace-nowrap flex items-center gap-1.5"
+        >
+          <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+          <span id="filter-unwatched-label">Todos</span>
+        </button>
+
+        <button
+          id="theme-toggle-btn"
+          title="Alternar tema claro/escuro"
+          class="p-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition"
+        >
+          <svg id="icon-sun" class="w-4 h-4 hidden dark:block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m8.66-13.66l-.71.71M4.05 19.95l-.71.71M21 12h-1M4 12H3m16.66 7.66l-.71-.71M4.05 4.05l-.71-.71M16 12a4 4 0 11-8 0 4 4 0 018 0z"/>
+          </svg>
+          <svg id="icon-moon" class="w-4 h-4 block dark:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Folder Tabs -->
+    <div class="max-w-6xl mx-auto px-4 pb-3 overflow-x-auto">
+      <div id="folder-tabs" class="flex items-center gap-2 min-w-max">
+        <!-- Tabs injected via JS -->
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main class="max-w-6xl w-full mx-auto px-4 pt-6 flex-1 grid grid-cols-1 lg:grid-cols-12 gap-6">
+    
+    <!-- Left / Main Playlist Column -->
+    <section class="lg:col-span-8 space-y-5">
+      <!-- Resume Banner (shown if user has an in-progress episode) -->
+      <div id="resume-banner" class="hidden rounded-2xl bg-gradient-to-r from-pink-500/15 via-rose-500/10 to-purple-500/15 border border-pink-500/25 p-4 flex items-center justify-between gap-4">
+        <div class="min-w-0">
+          <div class="text-[11px] font-bold uppercase tracking-wider text-pink-600 dark:text-pink-400 mb-0.5">Continuar de onde parou</div>
+          <div id="resume-title" class="text-sm font-semibold truncate"></div>
+          <div id="resume-meta" class="text-xs text-slate-500 dark:text-slate-400 mt-0.5"></div>
+        </div>
+        <button id="resume-play-btn" class="shrink-0 px-4 py-2.5 rounded-xl bg-pink-500 hover:bg-pink-600 text-white text-xs font-semibold shadow-md shadow-pink-500/25 transition flex items-center gap-1.5">
+          <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+          Retomar
+        </button>
+      </div>
+
+      <!-- Module Progress Header -->
+      <div id="module-header-card" class="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <h2 id="current-folder-title" class="text-base font-bold">Todos os Módulos</h2>
+          <p id="current-folder-subtitle" class="text-xs text-slate-500 dark:text-slate-400">Selecione um tema ou episódio para começar</p>
+        </div>
+        <div class="flex items-center gap-3">
+          <div class="w-32 h-2 rounded-full bg-slate-200 dark:bg-slate-800 overflow-hidden">
+            <div id="module-progress-bar" class="h-full bg-gradient-to-r from-pink-500 to-rose-500 rounded-full transition-all duration-300" style="width: 0%"></div>
+          </div>
+          <span id="module-progress-text" class="text-xs font-semibold text-slate-600 dark:text-slate-300 whitespace-nowrap">0 / 0</span>
+        </div>
+      </div>
+
+      <!-- Grouped Themes Container -->
+      <div id="playlist-container" class="space-y-4">
+        <!-- Rendered dynamically -->
+      </div>
+    </section>
+
+    <!-- Right Sidebar: Timestamps & Notes for Current Episode -->
+    <aside class="lg:col-span-4 space-y-4">
+      <div class="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 sticky top-32">
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="text-sm font-bold flex items-center gap-2">
+            <span class="text-base">📌</span> Marcadores de Estudo
+          </h3>
+          <span id="bookmarks-count" class="text-xs px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500">0</span>
+        </div>
+
+        <p class="text-xs text-slate-500 dark:text-slate-400 mb-3">
+          Salve trechos importantes do áudio atual para revisar depois com um clique.
+        </p>
+
+        <!-- Add Bookmark Form -->
+        <form id="bookmark-form" class="space-y-2 mb-4">
+          <div class="flex gap-2">
+            <input
+              id="bookmark-note-input"
+              type="text"
+              placeholder="Ex: Dose de ataque ou critério..."
+              class="flex-1 px-3 py-2 text-xs rounded-xl bg-slate-100 dark:bg-slate-800 border border-transparent focus:border-pink-500 focus:outline-none"
+            />
+            <button
+              type="submit"
+              class="px-3 py-2 rounded-xl bg-pink-500 hover:bg-pink-600 text-white text-xs font-semibold transition shrink-0"
+            >
+              + Marcar
+            </button>
+          </div>
+        </form>
+
+        <!-- Bookmarks List -->
+        <div id="bookmarks-list" class="space-y-2 max-h-80 overflow-y-auto pr-1">
+          <div class="text-xs text-slate-400 text-center py-6 border border-dashed border-slate-200 dark:border-slate-800 rounded-xl">
+            Nenhum marcador neste episódio ainda.
+          </div>
+        </div>
+
+        <!-- Troubleshooting / Drive Tip -->
+        <div class="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 text-[11px] text-slate-500 dark:text-slate-400 space-y-1.5">
+          <div class="font-semibold text-slate-600 dark:text-slate-300">💡 Dica de reprodução:</div>
+          <p>Certifique-se de que o repositório <strong>fdinizf/pagina-prontuario</strong> no GitHub esteja como <strong>Public</strong> e o Release publicado.</p>
+          <div class="pt-2 flex flex-wrap gap-2">
+            <label class="cursor-pointer px-2.5 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-medium transition inline-flex items-center gap-1.5">
+              <span>📂 Testar arquivo local (.m4a)</span>
+              <input id="local-audio-input" type="file" accept="audio/*" class="hidden" />
+            </label>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+  </main>
+
+  <!-- Toast Message Box (replaces alert()) -->
+  <div id="toast-box" class="fixed top-20 right-4 z-50 transform translate-x-full opacity-0 transition-all duration-300 pointer-events-none">
+    <div id="toast-content" class="px-4 py-3 rounded-2xl bg-slate-900 dark:bg-slate-800 text-white text-xs font-medium shadow-xl border border-slate-700 flex items-center gap-2">
+      <span id="toast-icon">🐷</span>
+      <span id="toast-text">Mensagem</span>
+    </div>
+  </div>
+
+  <!-- Fixed Bottom Audio Player Bar -->
+  <footer class="fixed bottom-0 inset-x-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-lg border-t border-slate-200 dark:border-slate-800 shadow-2xl">
+    <div class="max-w-6xl mx-auto px-4 pt-3 pb-4">
+      
+      <!-- Custom Piggy Progress Scrubber -->
+      <div class="mb-2.5">
+        <div class="flex items-center justify-between text-[11px] font-mono text-slate-500 dark:text-slate-400 mb-1.5">
+          <span id="current-time-label">00:00</span>
+          <span id="player-status-hint" class="text-[11px] font-sans text-pink-500 font-medium hidden sm:inline"></span>
+          <span id="duration-label">00:00</span>
+        </div>
+
+        <!-- Interactive Track -->
+        <div id="progress-track" class="relative h-6 flex items-center cursor-pointer group no-select" title="Clique ou arraste o porquinho para avançar/voltar">
+          <!-- Background Line -->
+          <div class="w-full h-2.5 rounded-full bg-slate-200 dark:bg-slate-800 overflow-hidden relative">
+            <!-- Buffered Bar -->
+            <div id="buffer-bar" class="absolute inset-y-0 left-0 bg-slate-300 dark:bg-slate-700 rounded-full transition-all duration-300" style="width: 0%"></div>
+            <!-- Active Pink Fill -->
+            <div id="progress-fill" class="absolute inset-y-0 left-0 bg-gradient-to-r from-pink-400 via-pink-500 to-rose-500 rounded-full" style="width: 0%"></div>
+          </div>
+
+          <!-- Piggy Head Thumb! -->
+          <div id="piggy-thumb" class="piggy-paused absolute top-1/2 left-0 w-9 h-9 pointer-events-none drop-shadow-md" style="left: 0%">
+            <svg viewBox="0 0 64 64" class="w-full h-full overflow-visible">
+              <!-- Left Ear -->
+              <path d="M13 23 C6 13, 13 6, 23 13 Z" fill="#F472B6" stroke="#831843" stroke-width="3" stroke-linejoin="round"/>
+              <!-- Right Ear -->
+              <path d="M51 23 C58 13, 51 6, 41 13 Z" fill="#F472B6" stroke="#831843" stroke-width="3" stroke-linejoin="round"/>
+              <!-- Head Base -->
+              <circle cx="32" cy="34" r="22" fill="#FBCFE8" stroke="#831843" stroke-width="3"/>
+              <!-- Rosy Cheeks -->
+              <circle cx="17" cy="37" r="3.5" fill="#F9A8D4" opacity="0.85"/>
+              <circle cx="47" cy="37" r="3.5" fill="#F9A8D4" opacity="0.85"/>
+              <!-- Eyes -->
+              <circle cx="23.5" cy="28" r="2.8" fill="#4C0519"/>
+              <circle cx="40.5" cy="28" r="2.8" fill="#4C0519"/>
+              <!-- Eye Shine -->
+              <circle cx="24.5" cy="27" r="1" fill="#FFFFFF"/>
+              <circle cx="41.5" cy="27" r="1" fill="#FFFFFF"/>
+              <!-- Snout -->
+              <ellipse cx="32" cy="39" rx="9.5" ry="6.8" fill="#F472B6" stroke="#831843" stroke-width="2.5"/>
+              <!-- Nostrils -->
+              <circle cx="28.8" cy="39" r="1.9" fill="#831843"/>
+              <circle cx="35.2" cy="39" r="1.9" fill="#831843"/>
+            </svg>
+          </div>
+        </div>
+      </div>
+
+      <!-- Main Controls Row -->
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        
+        <!-- Track Info -->
+        <div class="flex items-center gap-3 min-w-0 flex-1">
+          <div class="min-w-0">
+            <div class="flex items-center gap-2">
+              <span id="player-folder-badge" class="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-pink-500/15 text-pink-600 dark:text-pink-400 shrink-0">
+                Módulo
+              </span>
+              <span id="player-theme-label" class="text-xs text-slate-500 dark:text-slate-400 truncate">
+                Tema
+              </span>
+            </div>
+            <div id="player-title" class="text-sm font-bold truncate mt-0.5">
+              Escolha um resumo para ouvir
+            </div>
+          </div>
+        </div>
+
+        <!-- Playback Buttons -->
+        <div class="flex items-center gap-1.5 sm:gap-2.5">
+          <!-- Previous Track -->
+          <button id="prev-track-btn" title="Episódio anterior" class="p-2 rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition">
+            <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg>
+          </button>
+
+          <!-- Rewind 15s -->
+          <button id="rewind-btn" title="Voltar 15 segundos" class="px-2.5 py-2 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition">
+            -15s
+          </button>
+
+          <!-- Play / Pause -->
+          <button id="play-pause-btn" title="Reproduzir / Pausar" class="w-12 h-12 rounded-2xl bg-gradient-to-br from-pink-500 to-rose-600 hover:from-pink-600 hover:to-rose-700 text-white shadow-lg shadow-pink-500/30 flex items-center justify-center transition transform active:scale-95">
+            <svg id="play-icon" class="w-6 h-6 ml-0.5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+            <svg id="pause-icon" class="w-6 h-6 hidden" fill="currentColor" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+            <svg id="loading-spinner" class="w-6 h-6 animate-spin hidden" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+            </svg>
+          </button>
+
+          <!-- Forward 30s -->
+          <button id="forward-btn" title="Avançar 30 segundos" class="px-2.5 py-2 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition">
+            +30s
+          </button>
+
+          <!-- Next Track -->
+          <button id="next-track-btn" title="Próximo episódio" class="p-2 rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition">
+            <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg>
+          </button>
+        </div>
+
+        <!-- Extra Study Tools (Speed, Autoplay, Mark Done, Drive Link) -->
+        <div class="flex items-center gap-2">
+          <!-- Playback Speed -->
+          <button id="speed-btn" title="Alterar velocidade de reprodução" class="px-2.5 py-1.5 rounded-xl text-xs font-bold bg-slate-100 dark:bg-slate-800 text-pink-600 dark:text-pink-400 hover:bg-slate-200 dark:hover:bg-slate-700 transition min-w-[3.2rem]">
+            1.0x
+          </button>
+
+          <!-- Auto-advance Toggle -->
+          <button id="autoplay-btn" title="Reprodução contínua automática" class="px-2.5 py-1.5 rounded-xl text-xs font-medium bg-pink-500/15 text-pink-600 dark:text-pink-400 border border-pink-500/30 transition hidden sm:flex items-center gap-1">
+            <span>Auto</span>
+            <span id="autoplay-state">ON</span>
+          </button>
+
+          <!-- Mark Completed -->
+          <button id="mark-done-btn" title="Marcar episódio como concluído" class="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:text-emerald-500 transition">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/>
+            </svg>
+          </button>
+
+          <!-- Open directly in Google Drive -->
+          <a id="drive-fallback-link" href="#" target="_blank" rel="noopener noreferrer" title="Abrir arquivo diretamente no Google Drive" class="px-2.5 py-1.5 rounded-xl text-xs font-medium bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition flex items-center gap-1">
+            <span>Drive</span>
+            <span class="text-[10px]">↗</span>
+          </a>
+        </div>
+
+      </div>
+    </div>
+  </footer>
+
+  <!-- Hidden HTML5 Audio Element -->
+  <audio id="audio-element" preload="metadata"></audio>
+
+  <script>
+    /**
+     * GitHub Releases Configuration
+     * Repository: https://github.com/fdinizf/pagina-prontuario
+     */
+    const GITHUB_CONFIG = {
+      user: 'fdinizf',
+      repo: 'pagina-prontuario',
+      releaseTag: 'v1.0',
+      resolvedAssetsMap: {}, // { normalizedName: { browserUrl, apiUrl } }
+      blobCache: {} // { trackId: objectUrl }
+    };
+
+    /**
+     * Full Catalog mapped with exact GitHub Release v1.0 asset names + Drive IDs as backup
+     */
+    const AUDIO_CATALOG = [
+      // ==================== RAIZ ====================
+      { id: "1MtEgRk9ZHgNR486Hfu4Sk8lVXQS3swFs", githubAsset: "IAM.conceito.e.classificacao.-.5.Consenso.ESC.IAM.2026.m4a", folder: "Gerais", theme: "Cardiologia • Consenso ESC IAM 2026", title: "IAM conceito e classificação - 5 Consenso ESC IAM 2026" },
+      { id: "1rrGDkkBxE7Vutug-AP71lZaemPrGNbm5", githubAsset: "IAM.ECG.laboratorio.e.imagem.-.5.Consenso.ESC.IAM.2026.m4a", folder: "Gerais", theme: "Cardiologia • Consenso ESC IAM 2026", title: "IAM ECG, laboratório e imagem - 5 Consenso ESC IAM 2026" },
+      { id: "1G3RnjLBQ3aXYrmV-bzDieY2fUsldafPT", githubAsset: "Obstrucao.de.vias.aereas.na.pediatria.m4a", folder: "Gerais", theme: "Pediatria • Emergência", title: "Obstrução de vias aéreas na pediatria" },
+
+      // ==================== HMEC ====================
+      { id: "16Qk20dZJUDcxntcCrYyglyqNmgrTH_A9", githubAsset: "HMEC.-.BLS.AHA.2025.m4a", folder: "HMEC", theme: "Parada Cardiorrespiratória (BLS / ACLS 2025)", title: "HMEC - BLS AHA 2025" },
+      { id: "1CyIHqYa2xqZiQKasFBUOdLeCW7z6rNtw", githubAsset: "HMEC.-.ACLS.AHA.2025.-.Parte.1.m4a", folder: "HMEC", theme: "Parada Cardiorrespiratória (BLS / ACLS 2025)", title: "HMEC - ACLS AHA 2025 - Parte 1" },
+      { id: "1yn0zNA8IhUkQuSZxDZUo2pSHG4Syy0eC", githubAsset: "HMEC.-.ACLS.AHA.2025.-.Parte.2.-.Arritimias.m4a", folder: "HMEC", theme: "Parada Cardiorrespiratória (BLS / ACLS 2025)", title: "HMEC - ACLS AHA 2025 - Parte 2 - Arritmias" },
+      { id: "1gdRk7ABnCWugEU8JX7vzvuPCABNOoslv", githubAsset: "HMEC.-.Farmacologia_da_parada_cardiaca_no_ACLS_2025.m4a", folder: "HMEC", theme: "Parada Cardiorrespiratória (BLS / ACLS 2025)", title: "HMEC - Farmacologia da parada cardíaca no ACLS 2025" },
+      { id: "10S-bADmjD7AqwmynZicslItojVd1gxm0", githubAsset: "HMEC.-.Cuidados.pos-PCR.m4a", folder: "HMEC", theme: "Parada Cardiorrespiratória (BLS / ACLS 2025)", title: "HMEC - Cuidados pós-PCR" },
+      { id: "1ETrdIlIJ_ZMdoQ8J4DzzlNSx5-CDMbu0", githubAsset: "HMEC.-.Salvando.cerebro.pos-PRC.m4a", folder: "HMEC", theme: "Parada Cardiorrespiratória (BLS / ACLS 2025)", title: "HMEC - Salvando cérebro pós-PCR" },
+
+      { id: "1a-Erthw6dGQ5Z2-_qPa1rZ0hy8LLPzZv", githubAsset: "HMEC.-.Sepse.-.pt.1.m4a", folder: "HMEC", theme: "Sepse", title: "HMEC - Sepse - pt. 1" },
+      { id: "1eBTLoiygd-RCFEWeJbnUShPn4b4hRk5t", githubAsset: "HMEC.-.Sepse.-.pt.2.m4a", folder: "HMEC", theme: "Sepse", title: "HMEC - Sepse - pt. 2" },
+
+      { id: "112d2pqo5znE1rH7CvGC5r0RWAyruCpaR", githubAsset: "HMEC.-.Sindromes.hipertensivas.na.gestacao.-.pt.1.m4a", folder: "HMEC", theme: "Síndromes Hipertensivas na Gestação", title: "HMEC - Síndromes hipertensivas na gestação - pt 1" },
+      { id: "13jfvGHgz_aw3bb83SVccdww3SzKipXOx", githubAsset: "HMEC.-.Sindromes.hipertensivas.na.gestacao.-.pt.2.m4a", folder: "HMEC", theme: "Síndromes Hipertensivas na Gestação", title: "HMEC - Síndromes hipertensivas na gestação - pt 2" },
+      { id: "1loJKnpvIIU-j2qg5cEFVKs2FLckJqCJs", githubAsset: "HMEC.-.Sindromes.hipertensivas.na.gestacao.-.pt.3.m4a", folder: "HMEC", theme: "Síndromes Hipertensivas na Gestação", title: "HMEC - Síndromes hipertensivas na gestação - pt 3" },
+      { id: "1FOQXXP33cPWueJupIC4pl3vEfhAKE0xc", githubAsset: "HMEC.-.Sindromes.hipertensivas.na.gestacao.-.pt.4.m4a", folder: "HMEC", theme: "Síndromes Hipertensivas na Gestação", title: "HMEC - Síndromes hipertensivas na gestação - pt 4" },
+      { id: "1E_Ao0QShi2Jsb9WvnzfhnKCSs4aNd0k8", githubAsset: "HMEC.-.Sindromes.hipertensivas.na.gestacao.-.pt.5.m4a", folder: "HMEC", theme: "Síndromes Hipertensivas na Gestação", title: "HMEC - Síndromes hipertensivas na gestação - pt 5" },
+      { id: "1itD5hbBJNqkdJ9MISGK_BtY8rppdLvhW", githubAsset: "HMEC.-.Sindromes.hipertensivas.na.gestacao.-.pt.6.m4a", folder: "HMEC", theme: "Síndromes Hipertensivas na Gestação", title: "HMEC - Síndromes hipertensivas na gestação - pt 6" },
+
+      { id: "1bjknK16RxcXgoN0YguKvVxlowaH6t3H0", githubAsset: "Abordagem.geral.das.intoxicacoes.m4a", folder: "HMEC", theme: "Toxicologia (Intoxicações Exógenas)", title: "Abordagem geral das intoxicações" },
+      { id: "1B3ZUVRrUCPJCfD_vbjjUcxdHRexCLMIz", githubAsset: "Intoxicacao.-.alcoois.m4a", folder: "HMEC", theme: "Toxicologia (Intoxicações Exógenas)", title: "Intoxicação - álcoois" },
+      { id: "1gRAekXrubqvg5VjrvJITpnn7dfkHdasn", githubAsset: "Intoxicacao.-.CO.e.cianeto.m4a", folder: "HMEC", theme: "Toxicologia (Intoxicações Exógenas)", title: "Intoxicação - CO e cianeto" },
+      { id: "1_jhlZay4xU_5RU5qe3RBKEQfiXSXjXDq", githubAsset: "Intoxicacao.-.Opioides.Paracetamol.Antidepressivos.Triciclicos.Benzodiazepinicos.e.Antiarritmicos.m4a", folder: "HMEC", theme: "Toxicologia (Intoxicações Exógenas)", title: "Intoxicação - Opioides, Paracetamol, Antidepressivos Tricíclicos, Benzodiazepínicos e Antiarrítmicos" },
+      { id: "17MF0MlR2TGqj4j5Ch7JDN1kXBxzvWaiq", githubAsset: "Intoxicacao.-.Simpaticomimeticos.Anticolinergicos.e.a.Tempestade.Colinergica.m4a", folder: "HMEC", theme: "Toxicologia (Intoxicações Exógenas)", title: "Intoxicação - Simpaticomiméticos, Anticolinérgicos e a Tempestade Colinérgica" },
+
+      { id: "1XlzL-bFxl_xiYh-7jOi-WogrB8H6s8DH", githubAsset: "Crise.convulsiva.m4a", folder: "HMEC", theme: "Neurologia de Emergência", title: "Crise convulsiva" },
+
+      // ==================== TOCE ====================
+      { id: "1Q5yeN_w0AazZyWzTiRPsT-XRCjKvfD2H", githubAsset: "TOCE.-.abdome.agudo.parte.1.m4a", folder: "TOCE", theme: "Abdome Agudo (Geral, Obstrutivo e Vascular)", title: "TOCE - Abdome agudo parte 1" },
+      { id: "1XarO1jP2egUdrH3EdfN7dWvU9zUvWo_W", githubAsset: "TOCE.-.abdome.agudo.parte.2.m4a", folder: "TOCE", theme: "Abdome Agudo (Geral, Obstrutivo e Vascular)", title: "TOCE - Abdome agudo parte 2" },
+      { id: "1UULsoT_55eaPEuegbItcIZ_gFFWOkRBr", githubAsset: "TOCE.-.Adbome.obstrutivo.m4a", folder: "TOCE", theme: "Abdome Agudo (Geral, Obstrutivo e Vascular)", title: "TOCE - Abdome obstrutivo" },
+      { id: "1gPWYEs2tJ_BpmAQjbAOLN3mrmRa4SwgO", githubAsset: "TOCE-.abdome.isquemico.m4a", folder: "TOCE", theme: "Abdome Agudo (Geral, Obstrutivo e Vascular)", title: "TOCE - Abdome isquêmico" },
+      { id: "1hjxqNrRvz8spAFcPzsH3hl1xVb-cKY76", githubAsset: "TOCE.-.Volvo.sigmoide.m4a", folder: "TOCE", theme: "Abdome Agudo (Geral, Obstrutivo e Vascular)", title: "TOCE - Volvo sigmóide" },
+
+      { id: "1dBaQRe-dY-_rVACkXCjrzA_4kUWI7I4E", githubAsset: "TOCE.-.Apendicite_aguda_no_pronto-socorro.m4a", folder: "TOCE", theme: "Abdome Agudo Inflamatório", title: "TOCE - Apendicite aguda no pronto-socorro" },
+      { id: "1BtVFyFLkqzGToE_Iqu4crVL9iMcOUQLT", githubAsset: "TOCE.-.Manejo.de.apendicite.m4a", folder: "TOCE", theme: "Abdome Agudo Inflamatório", title: "TOCE - Manejo de apendicite" },
+      { id: "1wIaEFyKM3V2bSOrdzkCAAFPUW8VlAybv", githubAsset: "TOCE.-.Colecistite.aguda.calculosa.X.acalculosa.m4a", folder: "TOCE", theme: "Abdome Agudo Inflamatório", title: "TOCE - Colecistite aguda calculosa X acalculosa" },
+      { id: "1Rousf_UJsY2P29G1sFvmsMI5zNl3Ygmu", githubAsset: "TOCE.-.Manejo.de.colecisite.aguda.m4a", folder: "TOCE", theme: "Abdome Agudo Inflamatório", title: "TOCE - Manejo de colecistite aguda" },
+      { id: "1fRO5p9Jo2RcxlDUb4SL7mv3_a9Ivaa8M", githubAsset: "TOCE.-.Diverticulite.-.conceito.e.fisiopatologia.m4a", folder: "TOCE", theme: "Abdome Agudo Inflamatório", title: "TOCE - Diverticulite - conceito e fisiopatologia" },
+      { id: "1eyoQumcyInLOOCKJeljYDIbn-iQUFlbR", githubAsset: "TOCE.-.Diverticulite.-.Triagem.e.manejo.ambulatorial.m4a", folder: "TOCE", theme: "Abdome Agudo Inflamatório", title: "TOCE - Diverticulite - Triagem e manejo ambulatorial" },
+      { id: "1O8q4ywn5bT9DUS4gznJjVqeiReUhR6Fb", githubAsset: "TOCE.-.Diverticulite.-.Manejo.cirurgico.m4a", folder: "TOCE", theme: "Abdome Agudo Inflamatório", title: "TOCE - Diverticulite - Manejo cirúrgico" },
+      { id: "1qgscL4BX6pnnrKXA3LrA0D7GB1dj9xAJ", githubAsset: "TOCE.-.Fisiopatologia.e.etiologias.da.Pancreatite.aguda.m4a", folder: "TOCE", theme: "Abdome Agudo Inflamatório", title: "TOCE - Fisiopatologia e etiologias da Pancreatite aguda" },
+      { id: "1VW_0a_Bkr814RBjuz5W3ruMfeAVErUZv", githubAsset: "TOCE.-.Sintomas.e.diagnostico.da.Pancreatite.aguda_.m4a", folder: "TOCE", theme: "Abdome Agudo Inflamatório", title: "TOCE - Sintomas e diagnóstico da Pancreatite aguda" },
+      { id: "1YwgE5K2kQ6S8pgFEnUhohscn3B4AMNTN", githubAsset: "TOCE.-.Manejo.e.abordagem.da.pancreatite.aguda.m4a", folder: "TOCE", theme: "Abdome Agudo Inflamatório", title: "TOCE - Manejo e abordagem da pancreatite aguda" },
+
+      { id: "1q79o5UdCS5B6VDoxXeLg7vK-CI_aKHnL", githubAsset: "TOCE.-.Manejo_da_Hemorragia_Digestiva_Alta_na_Emergencia.m4a", folder: "TOCE", theme: "Hemorragia Digestiva", title: "TOCE - Manejo da Hemorragia Digestiva Alta na Emergência" },
+      { id: "15ZaWYRPCq1GWfx4GSht1g_5ANWs5ESxw", githubAsset: "TOCE.-.Hemorragia_digestiva_baixa_na_emergencia.m4a", folder: "TOCE", theme: "Hemorragia Digestiva", title: "TOCE - Hemorragia digestiva baixa na emergência" },
+
+      { id: "1w1DcSU6YVqXT2XufzrCgNrFNLaoywmSJ", githubAsset: "TOCE.-.Hernia.inguinal.pt.1.m4a", folder: "TOCE", theme: "Hérnias da Parede Abdominal", title: "TOCE - Hérnia inguinal pt. 1" },
+      { id: "1ydMkK2PrYvCmr4b0YqvOTfVuTWAdHXCQ", githubAsset: "TOCE.-.Hernia.inguinal.pt.2.m4a", folder: "TOCE", theme: "Hérnias da Parede Abdominal", title: "TOCE - Hérnia inguinal pt. 2" },
+      { id: "1y2VijavQbpzIoqOU5yDwCCmTpZWXCmaH", githubAsset: "TOCE.-.Hernia.inguinal.-.atualizacoes.2023.m4a", folder: "TOCE", theme: "Hérnias da Parede Abdominal", title: "TOCE - Hérnia inguinal - atualizações 2023" },
+
+      { id: "1PPi5Qx70KEV7wxOYOhw51wX-MD4P5Fh1", githubAsset: "TOCE.-.CA.de.esofago.m4a", folder: "TOCE", theme: "Oncologia Gastrointestinal", title: "TOCE - CA de esôfago" },
+      { id: "1fOXB4_4mEJtjkXLBdPWqpdKfVDyji4XX", githubAsset: "TOCE.-.CA.de.Estomago.m4a", folder: "TOCE", theme: "Oncologia Gastrointestinal", title: "TOCE - CA de Estômago" },
+      { id: "1MxBs1Maj6wyu0Wf_4IEg65AWAnCEVll5", githubAsset: "TOCE.-.CA.colorretal.m4a", folder: "TOCE", theme: "Oncologia Gastrointestinal", title: "TOCE - CA colorretal" },
+
+      { id: "1aopUymgk_AQK0ydeg6zoaLl_N9ZsQeDa", githubAsset: "xABCDE.e.os.choques.do.trauma.m4a", folder: "TOCE", theme: "Trauma e Queimados", title: "xABCDE e os choques do trauma" },
+      { id: "1Ys1Hdoz3rZeVfYe_SbEJYZGhVbx__v1F", githubAsset: "TOCE.-.Queimados.-.pt.1.m4a", folder: "TOCE", theme: "Trauma e Queimados", title: "TOCE - Queimados - pt 1" },
+      { id: "1BfCNpkRmFFqm4JUrkRs7h45hxw2Ash_M", githubAsset: "TOCE.-.Queimados.-.pt.2.m4a", folder: "TOCE", theme: "Trauma e Queimados", title: "TOCE - Queimados - pt 2" },
+      { id: "1mNYneKm4H4OhZIGweiUOgNbgB0ehps8c", githubAsset: "TOCE.-.Queimados.-.pt.3.m4a", folder: "TOCE", theme: "Trauma e Queimados", title: "TOCE - Queimados - pt 3" },
+      { id: "1DoqAoa5ZFMsZVhThU7Wgn0-qfmGeUe4c", githubAsset: "TOCE.-.Queimados.-.pt.4.m4a", folder: "TOCE", theme: "Trauma e Queimados", title: "TOCE - Queimados - pt 4" },
+
+      { id: "17JOrSFvmC28iZEU_4iqxO89FM4DqOA_z", githubAsset: "As_Armadilhas_Fisiologicas_da_Cirurgia_Neonatal.m4a", folder: "TOCE", theme: "Cirurgia Pediátrica", title: "As Armadilhas Fisiológicas da Cirurgia Neonatal" },
+
+      // ==================== PMSUS ====================
+      { id: "1vBlgeuBeDdi8m4p0jBqAzJyhHN0rYYWn", githubAsset: "PMSUS.-.Diretriz.Brasileira.2025.e.AHA.2026.m4a", folder: "PMSUS", theme: "Hipertensão Arterial (Diretriz 2025 / AHA 2026)", title: "PMSUS - Diretriz Brasileira 2025 e AHA 2026" },
+
+      { id: "1SriwylggCLACMmCC7DZBLw1qg-5xIkGz", githubAsset: "PMSUS.-.Hipotireodismo.clinico.e.subclinico.-.Diagnostico.m4a", folder: "PMSUS", theme: "Endocrinologia Tireoidiana", title: "PMSUS - Hipotireoidismo clínico e subclínico - Diagnóstico" },
+      { id: "1kwD7A_xNyzHU4QycmPkBA9XqKsNrxngg", githubAsset: "PMSUS.-.Hipotireodismo.-.manejo.m4a", folder: "PMSUS", theme: "Endocrinologia Tireoidiana", title: "PMSUS - Hipotireodismo - manejo" },
+      { id: "1hfEO8lD-QI1qNGS_VxEmGFc4uUD-FakK", githubAsset: "PMSUS.-.Nodulos.tireodeos.-.diagnostico.e.manejo.m4a", folder: "PMSUS", theme: "Endocrinologia Tireoidiana", title: "PMSUS - Nódulos tireoidianos - diagnóstico e manejo" },
+
+      { id: "1f9_Sz9A8tby45Fn7NtjQ2_1QcJnH12Hp", githubAsset: "PMSUS.-.Crescimento.infantil.m4a", folder: "PMSUS", theme: "Crescimento e Desenvolvimento Infantil", title: "PMSUS - Crescimento infantil" },
+      { id: "13-GtFIV1TZXZ_fI-oMJCgOt-zakwOXAQ", githubAsset: "PMSUS.-.Puberdade.precoce.m4a", folder: "PMSUS", theme: "Crescimento e Desenvolvimento Infantil", title: "PMSUS - Puberdade precoce" },
+      { id: "1chs2H_KELv4vM8_bUyFB3Gm_Iwl9YBvS", githubAsset: "PMSUS.-.puberdade.tardia.m4a", folder: "PMSUS", theme: "Crescimento e Desenvolvimento Infantil", title: "PMSUS - Puberdade tardia" },
+
+      { id: "1ecQOq7e9LpHSubexLjDAFrwzTyZQZVVr", githubAsset: "Epilepsia.PCDT.m4a", folder: "PMSUS", theme: "Neurologia Ambulatorial", title: "Epilepsia PCDT" },
+
+      // ==================== NCS COMPLEXO 1 ====================
+      { id: "1IgFKk66EyBqnOW7LWo5alJtcoLhZkmOW", githubAsset: "NCS.-.SP.1.1.-.Abordagem.das.arritmias.m4a", folder: "NCS Complexo 1", theme: "SP 1.1 • Arritmias e Fibrilação Atrial", title: "NCS - SP 1.1 - Abordagem das arritmias" },
+      { id: "1j_t7Zrf5RuL-Dn_BOSYZZ8qKbbipLu_C", githubAsset: "NCS.-.SP.1.1.-.FA.parte.1.m4a", folder: "NCS Complexo 1", theme: "SP 1.1 • Arritmias e Fibrilação Atrial", title: "NCS - SP 1.1 - FA parte 1" },
+
+      { id: "1HZd_0tkVuqLQo7BCJwC88_nzr_8hV3u3", githubAsset: "NCS.-.SP.1.2.-.Tratamento.inicial.de.SCA.m4a", folder: "NCS Complexo 1", theme: "SP 1.2 • Síndromes Coronarianas Agudas (IAM)", title: "NCS - SP 1.2 - Tratamento inicial de SCA" },
+      { id: "10vPCrTNgJsE11F3YrE9sWO4Dw2F6ATYs", githubAsset: "NCS.-.SP.1.2.-.IAM.-.ECG.e.paredes.m4a", folder: "NCS Complexo 1", theme: "SP 1.2 • Síndromes Coronarianas Agudas (IAM)", title: "NCS - SP 1.2 - IAM - ECG e paredes" },
+      { id: "1C0hO9uc2L9WwhPw--j8zza3zZrvvym2I", githubAsset: "NCS.-.SP.1.2.-.Manejo_do_infarto_com_supra_de_ST.m4a", folder: "NCS Complexo 1", theme: "SP 1.2 • Síndromes Coronarianas Agudas (IAM)", title: "NCS - SP 1.2 - Manejo do infarto com supra de ST" },
+      { id: "13wzwG2L1ifAmHmrWXjBWtGJ5_9oV_eev", githubAsset: "NCS.-.SP.1.2.-.Condutas_e_armadilhas_no_IAM_sem_supra.m4a", folder: "NCS Complexo 1", theme: "SP 1.2 • Síndromes Coronarianas Agudas (IAM)", title: "NCS - SP 1.2 - Condutas e armadilhas no IAM sem supra" },
+
+      { id: "1I1mbS5nkGNdxo58F7XMPnT7eUwbNzi-A", githubAsset: "NCS.-.SP.1.3.-.Manejo_da_encefalopatia_hipertensiva_na_emergencia.m4a", folder: "NCS Complexo 1", theme: "SP 1.3 • Emergências Hipertensivas", title: "NCS - SP 1.3 - Manejo da encefalopatia hipertensiva na emergência" },
+
+      { id: "1zKLrboMSTO8FM8U0JCl0ZF6nXTFhJUSs", githubAsset: "NCS.-.SP.1.4.-.Diagnostico_das_sindromes_hipertensivas_na_gestacao.m4a", folder: "NCS Complexo 1", theme: "SP 1.4 • Síndromes Hipertensivas na Gestação e HELLP", title: "NCS - SP 1.4 - Diagnóstico das síndromes hipertensivas na gestação" },
+      { id: "1rFz2TlfkwEOWwul04hhrE5fny2ygJqf6", githubAsset: "NCS.-.SP.1.4.-.Fisiopatologia_e_diagnostico_da_pre-eclampsia.m4a", folder: "NCS Complexo 1", theme: "SP 1.4 • Síndromes Hipertensivas na Gestação e HELLP", title: "NCS - SP 1.4 - Fisiopatologia e diagnóstico da pré-eclâmpsia" },
+      { id: "1B3aZx6bWo59sB9QihBHMPj8GQCSp35_q", githubAsset: "NCS.-.SP.1.4.-.Sindrome_HELLP_e_a_falsa_dor_epigastrica.m4a", folder: "NCS Complexo 1", theme: "SP 1.4 • Síndromes Hipertensivas na Gestação e HELLP", title: "NCS - SP 1.4 - Síndrome HELLP e a falsa dor epigástrica" },
+
+      { id: "1-x60Pm4wEOUxuLERUOxITPuoio0Sn0o-", githubAsset: "NCS.-.SP.1.5.-.reconhecendo.deterioracao.pediatrica.aguda.e.manejo.inicial.das.vias.aereas.m4a", folder: "NCS Complexo 1", theme: "SP 1.5 • Emergências Pediátricas e Bronquiolite", title: "NCS - SP 1.5 - Reconhecendo deterioração pediátrica aguda e manejo inicial das vias aéreas" },
+      { id: "17qqaO7zqLq60jGaAsdU2OJFLVuHbPqmg", githubAsset: "NCS.-.SP.1.5.-.PALS.e.PBLS.m4a", folder: "NCS Complexo 1", theme: "SP 1.5 • Emergências Pediátricas e Bronquiolite", title: "NCS - SP 1.5 - PALS e PBLS" },
+      { id: "1kEgXQ5pOX5FbIr_t9pxrgYrQnhTOEBzj", githubAsset: "NCS.-.SP.1.5.-.Bronquiolite.em.crianca.pt.1.m4a", folder: "NCS Complexo 1", theme: "SP 1.5 • Emergências Pediátricas e Bronquiolite", title: "NCS - SP 1.5 - Bronquiolite em criança pt 1" },
+      { id: "1BZzmy8NhI0rV8jTdUZwWtzjyvjJg-PiK", githubAsset: "NCS.-.SP.1.5.-.Bronquiolite.em.crianca.pt.2.m4a", folder: "NCS Complexo 1", theme: "SP 1.5 • Emergências Pediátricas e Bronquiolite", title: "NCS - SP 1.5 - Bronquiolite em criança pt 2" },
+      { id: "1JDZrVd0ckMSuTAQ2GyTVfeM2iLKntWdJ", githubAsset: "NCS.-.SP.1.5.-.Bronquiolite.em.crianca.pt.3.m4a", folder: "NCS Complexo 1", theme: "SP 1.5 • Emergências Pediátricas e Bronquiolite", title: "NCS - SP 1.5 - Bronquiolite em criança pt 3" },
+
+      // ==================== NCS COMPLEXO 2 ====================
+      { id: "1gRRP4lYSOkBMNV8CKi0rE2wUdHrZ2_my", githubAsset: "NCS.-.2.1.-.DM.1.m4a", folder: "NCS Complexo 2", theme: "SP 2.1 e 2.2 • Diabetes Mellitus e Complicações Agudas", title: "NCS - 2.1 - DM 1" },
+      { id: "1d8-QKSPXlBcbZpxraQvnB8mkcu-beoPU", githubAsset: "NCS.-.2.1.-.DM.2.m4a", folder: "NCS Complexo 2", theme: "SP 2.1 e 2.2 • Diabetes Mellitus e Complicações Agudas", title: "NCS - 2.1 - DM 2" },
+      { id: "1qc4vZWm70B9JzzJd3DnJzQj_jrytO4sk", githubAsset: "NCS.-.2.1.-.DM.1.e.2.-.tratamento.m4a", folder: "NCS Complexo 2", theme: "SP 2.1 e 2.2 • Diabetes Mellitus e Complicações Agudas", title: "NCS - 2.1 - DM 1 e 2 - tratamento" },
+      { id: "14ERtPkvnYbQNxpMc4FdOIi8o7nBYNVkf", githubAsset: "NCS.-.2.2.-.Cetoacidose.e.EHH.-.parte.1.m4a", folder: "NCS Complexo 2", theme: "SP 2.1 e 2.2 • Diabetes Mellitus e Complicações Agudas", title: "NCS - 2.2 - Cetoacidose e EHH - parte 1" },
+      { id: "15xTBkQ6v8x5DsyrQe0g28bcxvr5lIpFW", githubAsset: "NCS.-.2.2.-.Cetoacidose.e.EHH.-.parte.2.m4a", folder: "NCS Complexo 2", theme: "SP 2.1 e 2.2 • Diabetes Mellitus e Complicações Agudas", title: "NCS - 2.2 - Cetoacidose e EHH - parte 2" },
+
+      { id: "1g60aMpuVcaXeYcNjIrDVF6Slt-gmcU4G", githubAsset: "NCS.-.SP.2.2.-.S.Cushing.-.pt.1.m4a", folder: "NCS Complexo 2", theme: "SP 2.2 • Síndrome de Cushing", title: "NCS - SP 2.2 - S. Cushing - pt. 1" },
+      { id: "1ehbk3qQsJ_aZ_je2eVQ2USO6OxDb0x3S", githubAsset: "NCS.-.SP.2.2.-.S.Cushing.-.pt.2.m4a", folder: "NCS Complexo 2", theme: "SP 2.2 • Síndrome de Cushing", title: "NCS - SP 2.2 - S. Cushing - pt. 2" },
+      { id: "17m0pKRdFk8HaROGDipnLeiePWd51cpcG", githubAsset: "NCS.-.SP.2.2.-.S.Cushing.-.pt.3.m4a", folder: "NCS Complexo 2", theme: "SP 2.2 • Síndrome de Cushing", title: "NCS - SP 2.2 - S. Cushing - pt. 3" },
+      { id: "1C5qHrRLjSek0BphE_uk2BkB1_Zv02pQy", githubAsset: "NCS.-.SP.2.2.-.S.Cushing.-.pt.4.m4a", folder: "NCS Complexo 2", theme: "SP 2.2 • Síndrome de Cushing", title: "NCS - SP 2.2 - S. Cushing - pt. 4" },
+
+      { id: "1OLHicSgK_FAWB0y5HTj9qpR-PiSelOkf", githubAsset: "NCS.-.SP.2.3.-.Sindrome.metabolica.m4a", folder: "NCS Complexo 2", theme: "SP 2.3 • Síndrome Metabólica e Transtornos Alimentares", title: "NCS - SP 2.3 - Síndrome metabólica" },
+      { id: "1KEafAdSw4x4SFDLKGWzbH_l2eMkNqesZ", githubAsset: "NCS.-.SP.2.3.-.Anorexia.nervosa.pt.1.m4a", folder: "NCS Complexo 2", theme: "SP 2.3 • Síndrome Metabólica e Transtornos Alimentares", title: "NCS - SP 2.3 - Anorexia nervosa pt 1" },
+      { id: "1dsylcT4i0zhckmGEscSnOawo2PDH61j0", githubAsset: "NCS.-.SP.2.3.-.Anorexia.nervosa.pt.2.m4a", folder: "NCS Complexo 2", theme: "SP 2.3 • Síndrome Metabólica e Transtornos Alimentares", title: "NCS - SP 2.3 - Anorexia nervosa pt 2" },
+      { id: "1JX1gyyeMZx5brXGYcVCzEjlx1PUCqwjl", githubAsset: "NCS.-.SP.2.3.-.Anorexia.nervosa.pt.3.m4a", folder: "NCS Complexo 2", theme: "SP 2.3 • Síndrome Metabólica e Transtornos Alimentares", title: "NCS - SP 2.3 - Anorexia nervosa pt 3" },
+      { id: "1pvosuUpMQWMoFj9fVWRJsQSOgcJdXwC1", githubAsset: "NCS.-.SP.2.3.-.Bulimina.nervosa.m4a", folder: "NCS Complexo 2", theme: "SP 2.3 • Síndrome Metabólica e Transtornos Alimentares", title: "NCS - SP 2.3 - Bulimia nervosa" },
+      { id: "15pmwgp33l038C9ZuJ5MsIAp15trIHSFf", githubAsset: "NCS.-.SP.2.3.-.compulsao.alimentar.m4a", folder: "NCS Complexo 2", theme: "SP 2.3 • Síndrome Metabólica e Transtornos Alimentares", title: "NCS - SP 2.3 - Compulsão alimentar" },
+
+      { id: "1tvJGpxjv9IgMC9iL-mmgYC0PYHgO1ZX8", githubAsset: "NCS.-.SP.2.4.-.SOMP.pt.1.m4a", folder: "NCS Complexo 2", theme: "SP 2.4 • Síndrome dos Ovários Policísticos (SOP)", title: "NCS - SP 2.4 - SOMP pt 1" },
+      { id: "1oEoldVJXFyLmr6NyZXCqpLhAS_D6rVtB", githubAsset: "NCS.-.SP.2.4.-.SOMP.pt.2.m4a", folder: "NCS Complexo 2", theme: "SP 2.4 • Síndrome dos Ovários Policísticos (SOP)", title: "NCS - SP 2.4 - SOMP pt 2" },
+      { id: "1RbVQqdXa67o5kg9jyVrQaplCmYVu9obO", githubAsset: "NCS.-.SP.2.4.-.SOMP.pt.3.m4a", folder: "NCS Complexo 2", theme: "SP 2.4 • Síndrome dos Ovários Policísticos (SOP)", title: "NCS - SP 2.4 - SOMP pt 3" },
+      { id: "1EI3HQcxJzPUB-dLewsRZlSfPiiUObT56", githubAsset: "NCS.-.SP.2.4.-.SOMP.pt.4.m4a", folder: "NCS Complexo 2", theme: "SP 2.4 • Síndrome dos Ovários Policísticos (SOP)", title: "NCS - SP 2.4 - SOMP pt 4" },
+
+      // ==================== NCS COMPLEXO 3 ====================
+      { id: "1PkoTqRdIm6RsTjRRdF8n7s7GezXTko_D", githubAsset: "SP.3.1.-.Fisiopatolgia.da.herpes.zoster.m4a", folder: "NCS Complexo 3", theme: "SP 3.1 • Dermatologia Infecciosa", title: "SP 3.1 - Fisiopatologia da herpes zoster" },
+      { id: "1JpsSl-kSO98UW-RZKFMlq6gpvy72RbLV", githubAsset: "SP.3.1.-.Manejo.da.herpes.zoster.m4a", folder: "NCS Complexo 3", theme: "SP 3.1 • Dermatologia Infecciosa", title: "SP 3.1 - Manejo da herpes zoster" },
+      { id: "18UzQf0PdFSNNdyyV9dubKVFX4gtnbBJz", githubAsset: "SP.3.1.-.Hanseniase.m4a", folder: "NCS Complexo 3", theme: "SP 3.1 • Dermatologia Infecciosa", title: "SP 3.1 - Hanseníase" },
+
+      { id: "1pFSRzOFHvxoioQtbrf5PsUKJXaottqaB", githubAsset: "SP.3.2.-.Doencas.exantematicas.da.infancia.pt.1.m4a", folder: "NCS Complexo 3", theme: "SP 3.2 • Doenças Exantemáticas na Infância", title: "SP 3.2 - Doenças exantemáticas da infância pt 1" },
+      { id: "1Y1PQfIdqPvkDZqr2bZNP8-m9oTRwdILT", githubAsset: "SP.3.2.-.Doencas.exantematicas.da.infancia.pt.2.m4a", folder: "NCS Complexo 3", theme: "SP 3.2 • Doenças Exantemáticas na Infância", title: "SP 3.2 - Doenças exantemáticas da infância pt 2" },
+      { id: "1q1XIYLillo4o3BYnCNw4QI_u4WRQgbqo", githubAsset: "SP.3.2.-.Doencas.exantematicas.da.infancia.pt.3.m4a", folder: "NCS Complexo 3", theme: "SP 3.2 • Doenças Exantemáticas na Infância", title: "SP 3.2 - Doenças exantemáticas da infância pt 3" },
+      { id: "1vFrluDaZRuZn7_HdAYjdHspEFzprCQPu", githubAsset: "SP.3.2.-.Doencas.exantematicas.da.infancia.pt.4.m4a", folder: "NCS Complexo 3", theme: "SP 3.2 • Doenças Exantemáticas na Infância", title: "SP 3.2 - Doenças exantemáticas da infância pt 4" },
+
+      { id: "1OiVZbvOGiG2yKS7IpepuQxXQEE6bLyTt", githubAsset: "SP.3.3.-.LES.pt.1.m4a", folder: "NCS Complexo 3", theme: "Reumatologia • Lúpus Eritematoso Sistêmico", title: "LES pt 1" },
+      { id: "1xyYNdqHi3NA_xzAqJNc3Edg9NGgt0_q1", githubAsset: "SP.3.3.-.LES.pt.2.m4a", folder: "NCS Complexo 3", theme: "Reumatologia • Lúpus Eritematoso Sistêmico", title: "LES pt 2" },
+      { id: "1Q6ix48AZNcs8KU_79gVR0bknpzC5F1RL", githubAsset: "SP.3.3.-.LES.pt.3.m4a", folder: "NCS Complexo 3", theme: "Reumatologia • Lúpus Eritematoso Sistêmico", title: "LES pt 3" },
+      { id: "1saYsgOICp1jlX5bW0LtnOcotE26idyyC", githubAsset: "SP.3.3.-.LES.pt.4.m4a", folder: "NCS Complexo 3", theme: "Reumatologia • Lúpus Eritematoso Sistêmico", title: "LES pt 4" },
+    ];
+
+    // ==================== STATE & STORAGE ====================
+    const STORAGE_KEY = 'resumos_audio_player_v1';
+    const SPEEDS = [1.0, 1.25, 1.5, 1.75, 2.0];
+
+    let state = {
+      activeFolder: 'ALL',
+      searchQuery: '',
+      hideCompleted: false,
+      currentTrackId: AUDIO_CATALOG[0].id, // Starts on the very first track (Gerais - IAM conceito e classificação)
+      playbackSpeed: 1.0,
+      autoplay: true,
+      progressMap: {}, // { [id]: { currentTime, duration, completed } }
+      bookmarksMap: {}, // { [id]: [{ time, note, createdAt }] }
+      collapsedThemes: {}
+    };
+
+    // Load saved state
+    try {
+      const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
+      if (saved) {
+        state = { ...state, ...saved };
+      }
+    } catch (e) {
+      console.warn('Falha ao carregar estado salvo:', e);
+    }
+
+    function saveState() {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({
+          currentTrackId: state.currentTrackId,
+          playbackSpeed: state.playbackSpeed,
+          autoplay: state.autoplay,
+          progressMap: state.progressMap,
+          bookmarksMap: state.bookmarksMap,
+          collapsedThemes: state.collapsedThemes
+        }));
+      } catch (e) {
+        console.warn('Falha ao salvar estado:', e);
+      }
+    }
+
+    // ==================== DOM ELEMENTS ====================
+    const audio = document.getElementById('audio-element');
+    const folderTabsEl = document.getElementById('folder-tabs');
+    const playlistContainerEl = document.getElementById('playlist-container');
+    const searchInputEl = document.getElementById('search-input');
+    const clearSearchBtn = document.getElementById('clear-search-btn');
+    const filterUnwatchedBtn = document.getElementById('filter-unwatched-btn');
+    const filterUnwatchedLabel = document.getElementById('filter-unwatched-label');
+    const themeToggleBtn = document.getElementById('theme-toggle-btn');
+
+    // Player Controls
+    const playPauseBtn = document.getElementById('play-pause-btn');
+    const playIcon = document.getElementById('play-icon');
+    const pauseIcon = document.getElementById('pause-icon');
+    const loadingSpinner = document.getElementById('loading-spinner');
+    const prevTrackBtn = document.getElementById('prev-track-btn');
+    const nextTrackBtn = document.getElementById('next-track-btn');
+    const rewindBtn = document.getElementById('rewind-btn');
+    const forwardBtn = document.getElementById('forward-btn');
+    const speedBtn = document.getElementById('speed-btn');
+    const autoplayBtn = document.getElementById('autoplay-btn');
+    const autoplayStateEl = document.getElementById('autoplay-state');
+    const markDoneBtn = document.getElementById('mark-done-btn');
+    const driveFallbackLink = document.getElementById('drive-fallback-link');
+
+    // Progress & Piggy Thumb
+    const progressTrack = document.getElementById('progress-track');
+    const progressFill = document.getElementById('progress-fill');
+    const bufferBar = document.getElementById('buffer-bar');
+    const piggyThumb = document.getElementById('piggy-thumb');
+    const currentTimeLabel = document.getElementById('current-time-label');
+    const durationLabel = document.getElementById('duration-label');
+    const playerStatusHint = document.getElementById('player-status-hint');
+
+    // Track Metadata
+    const playerFolderBadge = document.getElementById('player-folder-badge');
+    const playerThemeLabel = document.getElementById('player-theme-label');
+    const playerTitle = document.getElementById('player-title');
+
+    // Bookmarks
+    const bookmarkForm = document.getElementById('bookmark-form');
+    const bookmarkNoteInput = document.getElementById('bookmark-note-input');
+    const bookmarksListEl = document.getElementById('bookmarks-list');
+    const bookmarksCountEl = document.getElementById('bookmarks-count');
+
+    // Resume Banner & Progress Stats
+    const resumeBanner = document.getElementById('resume-banner');
+    const resumeTitleEl = document.getElementById('resume-title');
+    const resumeMetaEl = document.getElementById('resume-meta');
+    const resumePlayBtn = document.getElementById('resume-play-btn');
+    const totalProgressBadge = document.getElementById('total-progress-badge');
+    const currentFolderTitle = document.getElementById('current-folder-title');
+    const currentFolderSubtitle = document.getElementById('current-folder-subtitle');
+    const moduleProgressBar = document.getElementById('module-progress-bar');
+    const moduleProgressText = document.getElementById('module-progress-text');
+
+    // ==================== HELPERS ====================
+    function normalizeKey(str) {
+      return (str || '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, '');
+    }
+
+    async function fetchGitHubReleaseAssets() {
+      try {
+        const apiUrl = `https://api.github.com/repos/${GITHUB_CONFIG.user}/${GITHUB_CONFIG.repo}/releases/latest`;
+        const res = await fetch(apiUrl);
+        if (!res.ok) {
+          console.warn('GitHub API status:', res.status);
+          return false;
+        }
+        const release = await res.json();
+        if (release.tag_name) {
+          GITHUB_CONFIG.releaseTag = release.tag_name;
+        }
+        if (Array.isArray(release.assets)) {
+          release.assets.forEach(asset => {
+            GITHUB_CONFIG.resolvedAssetsMap[normalizeKey(asset.name)] = {
+              browserUrl: asset.browser_download_url,
+              apiUrl: asset.url
+            };
+          });
+          console.log(`GitHub Release "${release.tag_name}" sincronizado: ${release.assets.length} arquivos.`);
+          return true;
+        }
+      } catch (err) {
+        console.warn('Não foi possível consultar a API do GitHub:', err);
+      }
+      return false;
+    }
+
+    function getAudioStreamUrl(track) {
+      if (track.localBlobUrl) return track.localBlobUrl;
+      if (GITHUB_CONFIG.blobCache[track.id]) return GITHUB_CONFIG.blobCache[track.id];
+      const normalized = normalizeKey(track.githubAsset);
+      if (GITHUB_CONFIG.resolvedAssetsMap[normalized]) {
+        return GITHUB_CONFIG.resolvedAssetsMap[normalized].browserUrl;
+      }
+      return `https://github.com/${GITHUB_CONFIG.user}/${GITHUB_CONFIG.repo}/releases/download/${GITHUB_CONFIG.releaseTag}/${encodeURIComponent(track.githubAsset)}`;
+    }
+
+    async function fetchAudioViaGitHubApi(track) {
+      const normalized = normalizeKey(track.githubAsset);
+      const assetInfo = GITHUB_CONFIG.resolvedAssetsMap[normalized];
+      if (!assetInfo || !assetInfo.apiUrl) return null;
+
+      playerStatusHint.textContent = 'Baixando faixa via API do GitHub...';
+      const res = await fetch(assetInfo.apiUrl, {
+        headers: { 'Accept': 'application/octet-stream' }
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const blob = await res.blob();
+      const typedBlob = new Blob([blob], { type: 'audio/mp4' });
+      const blobUrl = URL.createObjectURL(typedBlob);
+      GITHUB_CONFIG.blobCache[track.id] = blobUrl;
+      return blobUrl;
+    }
+
+    function getDriveViewUrl(fileId) {
+      return `https://drive.google.com/file/d/${fileId}/view?usp=drivesdk`;
+    }
+
+    function formatTime(seconds) {
+      if (!Number.isFinite(seconds) || seconds < 0) return '00:00';
+      const totalSec = Math.floor(seconds);
+      const hrs = Math.floor(totalSec / 3600);
+      const mins = Math.floor((totalSec % 3600) / 60);
+      const secs = totalSec % 60;
+      const pad = (n) => String(n).padStart(2, '0');
+      return hrs > 0 ? `${hrs}:${pad(mins)}:${pad(secs)}` : `${pad(mins)}:${pad(secs)}`;
+    }
+
+    let toastTimeout = null;
+    function showToast(message, icon = '🐷') {
+      const toastBox = document.getElementById('toast-box');
+      document.getElementById('toast-text').textContent = message;
+      document.getElementById('toast-icon').textContent = icon;
+      toastBox.classList.remove('translate-x-full', 'opacity-0');
+      clearTimeout(toastTimeout);
+      toastTimeout = setTimeout(() => {
+        toastBox.classList.add('translate-x-full', 'opacity-0');
+      }, 3200);
+    }
+
+    function getFilteredTracks() {
+      return AUDIO_CATALOG.filter(track => {
+        const matchesFolder = state.activeFolder === 'ALL' || track.folder === state.activeFolder;
+        const q = state.searchQuery.trim().toLowerCase();
+        const matchesQuery = !q ||
+          track.title.toLowerCase().includes(q) ||
+          track.theme.toLowerCase().includes(q) ||
+          track.folder.toLowerCase().includes(q);
+        const isDone = !!state.progressMap[track.id]?.completed;
+        const matchesUnwatched = !state.hideCompleted || !isDone;
+        return matchesFolder && matchesQuery && matchesUnwatched;
+      });
+    }
+
+    // ==================== RENDER FUNCTIONS ====================
+    function renderFolderTabs() {
+      const folders = ['ALL', ...new Set(AUDIO_CATALOG.map(t => t.folder))];
+      folderTabsEl.innerHTML = '';
+
+      folders.forEach(folder => {
+        const isActive = state.activeFolder === folder;
+        const folderTracks = folder === 'ALL'
+          ? AUDIO_CATALOG
+          : AUDIO_CATALOG.filter(t => t.folder === folder);
+        const completedCount = folderTracks.filter(t => state.progressMap[t.id]?.completed).length;
+
+        const btn = document.createElement('button');
+        btn.className = isActive
+          ? 'px-3.5 py-1.5 rounded-xl text-xs font-bold bg-pink-500 text-white shadow-sm shadow-pink-500/30 transition flex items-center gap-1.5'
+          : 'px-3.5 py-1.5 rounded-xl text-xs font-medium bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition flex items-center gap-1.5';
+
+        const label = folder === 'ALL' ? 'Todos' : folder;
+        btn.innerHTML = `
+          <span>${label}</span>
+          <span class="text-[10px] px-1.5 py-0.2 rounded-full ${isActive ? 'bg-white/25 text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400'}">
+            ${completedCount}/${folderTracks.length}
+          </span>
+        `;
+        btn.addEventListener('click', () => {
+          state.activeFolder = folder;
+          renderAll();
+        });
+        folderTabsEl.appendChild(btn);
+      });
+    }
+
+    function updateProgressStats() {
+      // Overall stats
+      const totalAll = AUDIO_CATALOG.length;
+      const doneAll = AUDIO_CATALOG.filter(t => state.progressMap[t.id]?.completed).length;
+      const pctAll = Math.round((doneAll / totalAll) * 100);
+      totalProgressBadge.textContent = `${pctAll}% concluído`;
+
+      // Current active folder stats
+      const scopeTracks = state.activeFolder === 'ALL'
+        ? AUDIO_CATALOG
+        : AUDIO_CATALOG.filter(t => t.folder === state.activeFolder);
+      const doneScope = scopeTracks.filter(t => state.progressMap[t.id]?.completed).length;
+      const pctScope = scopeTracks.length ? Math.round((doneScope / scopeTracks.length) * 100) : 0;
+
+      currentFolderTitle.textContent = state.activeFolder === 'ALL'
+        ? 'Todos os Módulos e Temas'
+        : `Módulo: ${state.activeFolder}`;
+      currentFolderSubtitle.textContent = `${scopeTracks.length} episódios disponíveis`;
+      moduleProgressBar.style.width = `${pctScope}%`;
+      moduleProgressText.textContent = `${doneScope} / ${scopeTracks.length} (${pctScope}%)`;
+
+      // Resume banner check
+      const currentTrack = AUDIO_CATALOG.find(t => t.id === state.currentTrackId);
+      const currentProg = state.progressMap[state.currentTrackId];
+      if (currentTrack && currentProg && currentProg.currentTime > 5 && !currentProg.completed) {
+        resumeBanner.classList.remove('hidden');
+        resumeTitleEl.textContent = currentTrack.title;
+        resumeMetaEl.textContent = `${currentTrack.folder} • Parou em ${formatTime(currentProg.currentTime)}`;
+      } else {
+        resumeBanner.classList.add('hidden');
+      }
+    }
+
+    function renderPlaylist() {
+      const tracks = getFilteredTracks();
+      playlistContainerEl.innerHTML = '';
+
+      if (tracks.length === 0) {
+        playlistContainerEl.innerHTML = `
+          <div class="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-8 text-center">
+            <div class="text-3xl mb-2">🔍</div>
+            <h3 class="text-sm font-bold">Nenhum resumo encontrado</h3>
+            <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Tente limpar a busca ou desativar o filtro de concluídos.</p>
+          </div>
+        `;
+        return;
+      }
+
+      // Group by Folder -> Theme
+      const grouped = {};
+      tracks.forEach(track => {
+        const groupKey = state.activeFolder === 'ALL'
+          ? `${track.folder} — ${track.theme}`
+          : track.theme;
+        if (!grouped[groupKey]) grouped[groupKey] = [];
+        grouped[groupKey].push(track);
+      });
+
+      Object.entries(grouped).forEach(([groupTitle, groupTracks]) => {
+        const isCollapsed = !!state.collapsedThemes[groupTitle];
+        const completedInGroup = groupTracks.filter(t => state.progressMap[t.id]?.completed).length;
+
+        const card = document.createElement('div');
+        card.className = 'rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm';
+
+        // Theme Group Header
+        const header = document.createElement('button');
+        header.className = 'w-full px-4 py-3.5 bg-slate-50/70 dark:bg-slate-800/40 hover:bg-slate-100/80 dark:hover:bg-slate-800/70 flex items-center justify-between gap-3 text-left transition';
+        header.innerHTML = `
+          <div class="flex items-center gap-2.5 min-w-0">
+            <span class="w-2.5 h-2.5 rounded-full ${completedInGroup === groupTracks.length ? 'bg-emerald-500' : 'bg-pink-500'} shrink-0"></span>
+            <h3 class="text-xs sm:text-sm font-bold truncate">${groupTitle}</h3>
+          </div>
+          <div class="flex items-center gap-2.5 shrink-0">
+            <span class="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-slate-200/70 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
+              ${completedInGroup}/${groupTracks.length}
+            </span>
+            <svg class="w-4 h-4 text-slate-400 transform transition-transform ${isCollapsed ? '-rotate-90' : 'rotate-0'}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+            </svg>
+          </div>
+        `;
+        header.addEventListener('click', () => {
+          state.collapsedThemes[groupTitle] = !isCollapsed;
+          saveState();
+          renderPlaylist();
+        });
+
+        card.appendChild(header);
+
+        if (!isCollapsed) {
+          const list = document.createElement('div');
+          list.className = 'divide-y divide-slate-100 dark:divide-slate-800/80';
+
+          groupTracks.forEach(track => {
+            const isCurrent = track.id === state.currentTrackId;
+            const prog = state.progressMap[track.id] || {};
+            const isCompleted = !!prog.completed;
+            const pct = prog.duration ? Math.min(100, Math.round((prog.currentTime / prog.duration) * 100)) : 0;
+            const trackBookmarks = state.bookmarksMap[track.id]?.length || 0;
+
+            const row = document.createElement('div');
+            row.className = `px-4 py-3 flex items-center justify-between gap-3 transition cursor-pointer ${
+              isCurrent
+                ? 'bg-pink-500/10 dark:bg-pink-500/15'
+                : 'hover:bg-slate-50 dark:hover:bg-slate-800/40'
+            }`;
+
+            row.innerHTML = `
+              <div class="flex items-center gap-3 min-w-0 flex-1">
+                <button class="play-row-btn w-9 h-9 rounded-xl flex items-center justify-center shrink-0 transition ${
+                  isCurrent
+                    ? 'bg-pink-500 text-white shadow-md shadow-pink-500/25'
+                    : isCompleted
+                      ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
+                      : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'
+                }">
+                  ${
+                    isCurrent && !audio.paused
+                      ? '<svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>'
+                      : '<svg class="w-4 h-4 ml-0.5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>'
+                  }
+                </button>
+                <div class="min-w-0 flex-1">
+                  <div class="text-xs sm:text-sm font-semibold truncate ${isCurrent ? 'text-pink-600 dark:text-pink-400' : ''}">
+                    ${track.title}
+                  </div>
+                  <div class="flex flex-wrap items-center gap-2 mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+                    ${isCompleted ? '<span class="text-emerald-600 dark:text-emerald-400 font-semibold">✓ Concluído</span>' : ''}
+                    ${!isCompleted && prog.currentTime > 3 ? `<span class="text-pink-500 font-medium">Em andamento (${formatTime(prog.currentTime)} • ${pct}%)</span>` : ''}
+                    ${!isCompleted && (!prog.currentTime || prog.currentTime <= 3) ? '<span>Não iniciado</span>' : ''}
+                    ${trackBookmarks > 0 ? `<span class="px-1.5 py-0.2 rounded bg-amber-500/15 text-amber-600 dark:text-amber-400 font-medium">📌 ${trackBookmarks}</span>` : ''}
+                  </div>
+                </div>
+              </div>
+
+              <div class="flex items-center gap-1.5 shrink-0">
+                <button
+                  class="toggle-done-row-btn p-2 rounded-lg text-xs transition ${
+                    isCompleted
+                      ? 'text-emerald-500 bg-emerald-500/10'
+                      : 'text-slate-400 hover:text-emerald-500 hover:bg-slate-100 dark:hover:bg-slate-800'
+                  }"
+                  title="${isCompleted ? 'Desmarcar concluído' : 'Marcar como concluído'}"
+                >
+                  ✓
+                </button>
+                <a
+                  href="${getDriveViewUrl(track.id)}"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onclick="event.stopPropagation()"
+                  title="Abrir no Google Drive"
+                  class="p-2 rounded-lg text-xs text-slate-400 hover:text-pink-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+                >
+                  ↗
+                </a>
+              </div>
+            `;
+
+            // Click row to load & play
+            row.addEventListener('click', () => {
+              if (state.currentTrackId === track.id) {
+                togglePlayPause();
+              } else {
+                loadTrack(track.id, true);
+              }
+            });
+
+            // Toggle completed button
+            const toggleDoneBtn = row.querySelector('.toggle-done-row-btn');
+            toggleDoneBtn.addEventListener('click', (e) => {
+              e.stopPropagation();
+              toggleTrackCompleted(track.id);
+            });
+
+            list.appendChild(row);
+          });
+
+          card.appendChild(list);
+        }
+
+        playlistContainerEl.appendChild(card);
+      });
+    }
+
+    function renderBookmarks() {
+      const list = state.bookmarksMap[state.currentTrackId] || [];
+      bookmarksCountEl.textContent = list.length;
+      bookmarksListEl.innerHTML = '';
+
+      if (list.length === 0) {
+        bookmarksListEl.innerHTML = `
+          <div class="text-xs text-slate-400 text-center py-6 border border-dashed border-slate-200 dark:border-slate-800 rounded-xl">
+            Nenhum marcador neste episódio ainda.
+          </div>
+        `;
+        return;
+      }
+
+      list.sort((a, b) => a.time - b.time).forEach((bm, index) => {
+        const item = document.createElement('div');
+        item.className = 'p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/70 dark:border-slate-700/70 flex items-center justify-between gap-2 group';
+        item.innerHTML = `
+          <button class="flex items-center gap-2.5 text-left min-w-0 flex-1">
+            <span class="px-2 py-0.5 rounded-md bg-pink-500/15 text-pink-600 dark:text-pink-400 font-mono text-[11px] font-bold shrink-0">
+              ${formatTime(bm.time)}
+            </span>
+            <span class="text-xs font-medium truncate">${bm.note}</span>
+          </button>
+          <button class="delete-bm-btn text-slate-400 hover:text-rose-500 text-xs px-1.5 py-0.5 rounded transition" title="Remover marcador">
+            ✕
+          </button>
+        `;
+
+        item.querySelector('button:first-child').addEventListener('click', () => {
+          audio.currentTime = bm.time;
+          if (audio.paused) audio.play().catch(() => {});
+          showToast(`Pulando para ${formatTime(bm.time)}`, '📌');
+        });
+
+        item.querySelector('.delete-bm-btn').addEventListener('click', () => {
+          state.bookmarksMap[state.currentTrackId].splice(index, 1);
+          saveState();
+          renderBookmarks();
+          renderPlaylist();
+        });
+
+        bookmarksListEl.appendChild(item);
+      });
+    }
+
+    function renderAll() {
+      renderFolderTabs();
+      updateProgressStats();
+      renderPlaylist();
+      renderBookmarks();
+    }
+
+    // ==================== AUDIO ENGINE ====================
+    function setPlayButtonState(status) {
+      playIcon.classList.add('hidden');
+      pauseIcon.classList.add('hidden');
+      loadingSpinner.classList.add('hidden');
+
+      if (status === 'loading') {
+        loadingSpinner.classList.remove('hidden');
+        piggyThumb.classList.remove('piggy-playing');
+        piggyThumb.classList.add('piggy-paused');
+      } else if (status === 'playing') {
+        pauseIcon.classList.remove('hidden');
+        piggyThumb.classList.remove('piggy-paused');
+        piggyThumb.classList.add('piggy-playing');
+      } else {
+        playIcon.classList.remove('hidden');
+        piggyThumb.classList.remove('piggy-playing');
+        piggyThumb.classList.add('piggy-paused');
+      }
+    }
+
+    function updatePiggyScrubber(currentTime, duration) {
+      const pct = duration > 0 ? Math.min(100, Math.max(0, (currentTime / duration) * 100)) : 0;
+      progressFill.style.width = `${pct}%`;
+      piggyThumb.style.left = `${pct}%`;
+      currentTimeLabel.textContent = formatTime(currentTime);
+      durationLabel.textContent = formatTime(duration);
+    }
+
+    function loadTrack(trackId, autoPlay = false) {
+      const track = AUDIO_CATALOG.find(t => t.id === trackId) || AUDIO_CATALOG[0];
+      state.currentTrackId = track.id;
+      saveState();
+
+      // Update UI labels
+      playerFolderBadge.textContent = track.folder;
+      playerThemeLabel.textContent = track.theme;
+      playerTitle.textContent = track.title;
+      driveFallbackLink.href = getDriveViewUrl(track.id);
+
+      const isDone = !!state.progressMap[track.id]?.completed;
+      markDoneBtn.className = isDone
+        ? 'p-2 rounded-xl bg-emerald-500/15 text-emerald-500 transition'
+        : 'p-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:text-emerald-500 transition';
+
+      // Set Audio Source (GitHub Releases)
+      playerStatusHint.textContent = 'Carregando áudio do GitHub...';
+      setPlayButtonState('loading');
+      let triedApiFallback = false;
+      audio.src = getAudioStreamUrl(track);
+      audio.playbackRate = state.playbackSpeed;
+
+      const savedProg = state.progressMap[track.id];
+      const resumeTime = (savedProg && !savedProg.completed && savedProg.currentTime > 2) ? savedProg.currentTime : 0;
+      updatePiggyScrubber(resumeTime, savedProg?.duration || 0);
+
+      audio.onloadedmetadata = () => {
+        playerStatusHint.textContent = '';
+        if (resumeTime > 0 && resumeTime < audio.duration - 3) {
+          audio.currentTime = resumeTime;
+        }
+        updatePiggyScrubber(audio.currentTime, audio.duration);
+        if (autoPlay) {
+          audio.play()
+            .then(() => setPlayButtonState('playing'))
+            .catch(() => {
+              setPlayButtonState('paused');
+              showToast('Clique em Play para iniciar a reprodução', '▶️');
+            });
+        } else {
+          setPlayButtonState('paused');
+        }
+      };
+
+      audio.onerror = async () => {
+        if (!triedApiFallback && !track.localBlobUrl) {
+          triedApiFallback = true;
+          try {
+            const blobUrl = await fetchAudioViaGitHubApi(track);
+            if (blobUrl) {
+              audio.src = blobUrl;
+              audio.load();
+              return;
+            }
+          } catch (apiErr) {
+            console.warn('Fallback API GitHub falhou:', apiErr);
+          }
+        }
+        setPlayButtonState('paused');
+        const code = audio.error ? audio.error.code : 'desconhecido';
+        playerStatusHint.innerHTML = `Bloqueio do navegador (cód. ${code}) • Abra o arquivo publicado no GitHub Pages ou use <a href="${getDriveViewUrl(track.id)}" target="_blank" class="underline font-bold">Drive ↗</a>`;
+      };
+
+      // Update Media Session (Lock Screen Controls)
+      if ('mediaSession' in navigator) {
+        navigator.mediaSession.metadata = new MediaMetadata({
+          title: track.title,
+          artist: track.theme,
+          album: `Resumos em Áudio • ${track.folder}`
+        });
+      }
+
+      renderAll();
+    }
+
+    function togglePlayPause() {
+      if (!audio.src) {
+        loadTrack(state.currentTrackId, true);
+        return;
+      }
+      if (audio.paused) {
+        if (audio.readyState === 0) {
+          loadTrack(state.currentTrackId, true);
+          return;
+        }
+        audio.play()
+          .then(() => {
+            setPlayButtonState('playing');
+            renderPlaylist();
+          })
+          .catch((err) => {
+            setPlayButtonState('paused');
+            showToast(`Não foi possível iniciar (${err?.name || 'erro de rede'}).`, '⚠️');
+          });
+      } else {
+        audio.pause();
+        setPlayButtonState('paused');
+        renderPlaylist();
+      }
+    }
+
+    function toggleTrackCompleted(trackId) {
+      const prev = state.progressMap[trackId] || {};
+      const nextCompleted = !prev.completed;
+      state.progressMap[trackId] = {
+        ...prev,
+        completed: nextCompleted
+      };
+      saveState();
+      if (trackId === state.currentTrackId) {
+        markDoneBtn.className = nextCompleted
+          ? 'p-2 rounded-xl bg-emerald-500/15 text-emerald-500 transition'
+          : 'p-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:text-emerald-500 transition';
+      }
+      showToast(nextCompleted ? 'Marcado como concluído!' : 'Desmarcado como concluído', nextCompleted ? '✅' : '↩️');
+      renderAll();
+    }
+
+    function playRelativeTrack(offset) {
+      const list = getFilteredTracks();
+      const idx = list.findIndex(t => t.id === state.currentTrackId);
+      if (idx === -1 && list.length > 0) {
+        loadTrack(list[0].id, true);
+        return;
+      }
+      const nextIdx = idx + offset;
+      if (nextIdx >= 0 && nextIdx < list.length) {
+        loadTrack(list[nextIdx].id, true);
+      } else {
+        showToast(offset > 0 ? 'Fim da lista atual!' : 'Você já está no primeiro episódio', '🐷');
+      }
+    }
+
+    // ==================== AUDIO EVENTS ====================
+    audio.addEventListener('timeupdate', () => {
+      const cur = audio.currentTime;
+      const dur = audio.duration;
+      updatePiggyScrubber(cur, dur);
+
+      if (dur > 0) {
+        const isDone = cur / dur >= 0.95;
+        const prev = state.progressMap[state.currentTrackId] || {};
+        state.progressMap[state.currentTrackId] = {
+          currentTime: cur,
+          duration: dur,
+          completed: prev.completed || isDone
+        };
+        // Save periodically every ~3 seconds
+        if (Math.floor(cur) % 3 === 0) {
+          saveState();
+        }
+      }
+    });
+
+    audio.addEventListener('progress', () => {
+      if (audio.duration > 0 && audio.buffered.length > 0) {
+        const bufferedEnd = audio.buffered.end(audio.buffered.length - 1);
+        const pct = Math.min(100, (bufferedEnd / audio.duration) * 100);
+        bufferBar.style.width = `${pct}%`;
+      }
+    });
+
+    audio.addEventListener('playing', () => {
+      playerStatusHint.textContent = '';
+      setPlayButtonState('playing');
+      renderPlaylist();
+    });
+
+    audio.addEventListener('pause', () => {
+      setPlayButtonState('paused');
+      saveState();
+      updateProgressStats();
+      renderPlaylist();
+    });
+
+    audio.addEventListener('ended', () => {
+      const prev = state.progressMap[state.currentTrackId] || {};
+      state.progressMap[state.currentTrackId] = {
+        ...prev,
+        currentTime: audio.duration || 0,
+        completed: true
+      };
+      saveState();
+      renderAll();
+
+      if (state.autoplay) {
+        showToast('Avançando para o próximo resumo...', '⏭️');
+        playRelativeTrack(1);
+      }
+    });
+
+    // ==================== SCRUBBER INTERACTION (MOUSE & TOUCH) ====================
+    let isScrubbing = false;
+
+    function scrubToClientX(clientX) {
+      const rect = progressTrack.getBoundingClientRect();
+      const ratio = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
+      const targetTime = ratio * (audio.duration || 0);
+      updatePiggyScrubber(targetTime, audio.duration || 0);
+      return targetTime;
+    }
+
+    progressTrack.addEventListener('mousedown', (e) => {
+      if (!audio.duration) return;
+      isScrubbing = true;
+      scrubToClientX(e.clientX);
+    });
+
+    window.addEventListener('mousemove', (e) => {
+      if (!isScrubbing) return;
+      scrubToClientX(e.clientX);
+    });
+
+    window.addEventListener('mouseup', (e) => {
+      if (!isScrubbing) return;
+      isScrubbing = false;
+      if (audio.duration) {
+        audio.currentTime = scrubToClientX(e.clientX);
+      }
+    });
+
+    progressTrack.addEventListener('touchstart', (e) => {
+      if (!audio.duration) return;
+      isScrubbing = true;
+      scrubToClientX(e.touches[0].clientX);
+    }, { passive: true });
+
+    window.addEventListener('touchmove', (e) => {
+      if (!isScrubbing) return;
+      scrubToClientX(e.touches[0].clientX);
+    }, { passive: true });
+
+    window.addEventListener('touchend', (e) => {
+      if (!isScrubbing) return;
+      isScrubbing = false;
+      if (audio.duration && e.changedTouches[0]) {
+        audio.currentTime = scrubToClientX(e.changedTouches[0].clientX);
+      }
+    });
+
+    // ==================== UI BUTTON LISTENERS ====================
+    playPauseBtn.addEventListener('click', togglePlayPause);
+    prevTrackBtn.addEventListener('click', () => playRelativeTrack(-1));
+    nextTrackBtn.addEventListener('click', () => playRelativeTrack(1));
+
+    rewindBtn.addEventListener('click', () => {
+      if (!audio.duration) return;
+      audio.currentTime = Math.max(0, audio.currentTime - 15);
+    });
+
+    forwardBtn.addEventListener('click', () => {
+      if (!audio.duration) return;
+      audio.currentTime = Math.min(audio.duration, audio.currentTime + 30);
+    });
+
+    speedBtn.addEventListener('click', () => {
+      const idx = SPEEDS.indexOf(state.playbackSpeed);
+      const nextSpeed = SPEEDS[(idx + 1) % SPEEDS.length];
+      state.playbackSpeed = nextSpeed;
+      audio.playbackRate = nextSpeed;
+      speedBtn.textContent = `${nextSpeed.toFixed(2).replace(/\.00$/, '.0').replace(/(\.\d)0$/, '$1')}x`;
+      saveState();
+      showToast(`Velocidade: ${speedBtn.textContent}`, '⚡');
+    });
+
+    autoplayBtn.addEventListener('click', () => {
+      state.autoplay = !state.autoplay;
+      autoplayStateEl.textContent = state.autoplay ? 'ON' : 'OFF';
+      autoplayBtn.className = state.autoplay
+        ? 'px-2.5 py-1.5 rounded-xl text-xs font-medium bg-pink-500/15 text-pink-600 dark:text-pink-400 border border-pink-500/30 transition hidden sm:flex items-center gap-1'
+        : 'px-2.5 py-1.5 rounded-xl text-xs font-medium bg-slate-100 dark:bg-slate-800 text-slate-500 transition hidden sm:flex items-center gap-1';
+      saveState();
+      showToast(`Reprodução contínua ${state.autoplay ? 'ativada' : 'desativada'}`, '🔁');
+    });
+
+    markDoneBtn.addEventListener('click', () => {
+      toggleTrackCompleted(state.currentTrackId);
+    });
+
+    resumePlayBtn.addEventListener('click', () => {
+      loadTrack(state.currentTrackId, true);
+    });
+
+    // Search & Filters
+    searchInputEl.addEventListener('input', (e) => {
+      state.searchQuery = e.target.value;
+      clearSearchBtn.classList.toggle('hidden', !state.searchQuery);
+      renderPlaylist();
+    });
+
+    clearSearchBtn.addEventListener('click', () => {
+      state.searchQuery = '';
+      searchInputEl.value = '';
+      clearSearchBtn.classList.add('hidden');
+      renderPlaylist();
+    });
+
+    filterUnwatchedBtn.addEventListener('click', () => {
+      state.hideCompleted = !state.hideCompleted;
+      filterUnwatchedLabel.textContent = state.hideCompleted ? 'Pendentes' : 'Todos';
+      renderPlaylist();
+    });
+
+    // Dark/Light Theme Toggle
+    themeToggleBtn.addEventListener('click', () => {
+      document.documentElement.classList.toggle('dark');
+    });
+
+    // Local File Tester
+    const localAudioInput = document.getElementById('local-audio-input');
+    if (localAudioInput) {
+      localAudioInput.addEventListener('change', (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        const currentTrack = AUDIO_CATALOG.find(t => t.id === state.currentTrackId) || AUDIO_CATALOG[0];
+        currentTrack.localBlobUrl = URL.createObjectURL(file);
+        showToast(`Carregando arquivo local: ${file.name}`, '📂');
+        loadTrack(currentTrack.id, true);
+      });
+    }
+
+    // Add Bookmark
+    bookmarkForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const note = bookmarkNoteInput.value.trim() || 'Trecho importante';
+      const time = audio.currentTime || 0;
+      if (!state.bookmarksMap[state.currentTrackId]) {
+        state.bookmarksMap[state.currentTrackId] = [];
+      }
+      state.bookmarksMap[state.currentTrackId].push({
+        time,
+        note,
+        createdAt: Date.now()
+      });
+      bookmarkNoteInput.value = '';
+      saveState();
+      renderBookmarks();
+      renderPlaylist();
+      showToast(`Marcado em ${formatTime(time)}`, '📌');
+    });
+
+    // Media Session Handlers
+    if ('mediaSession' in navigator) {
+      navigator.mediaSession.setActionHandler('play', () => audio.play());
+      navigator.mediaSession.setActionHandler('pause', () => audio.pause());
+      navigator.mediaSession.setActionHandler('previoustrack', () => playRelativeTrack(-1));
+      navigator.mediaSession.setActionHandler('nexttrack', () => playRelativeTrack(1));
+      navigator.mediaSession.setActionHandler('seekbackward', () => { audio.currentTime = Math.max(0, audio.currentTime - 15); });
+      navigator.mediaSession.setActionHandler('seekforward', () => { audio.currentTime = Math.min(audio.duration || 0, audio.currentTime + 30); });
+    }
+
+    // ==================== INITIALIZE ====================
+    speedBtn.textContent = `${state.playbackSpeed.toFixed(2).replace(/\.00$/, '.0').replace(/(\.\d)0$/, '$1')}x`;
+    autoplayStateEl.textContent = state.autoplay ? 'ON' : 'OFF';
+    
+    fetchGitHubReleaseAssets().then((synced) => {
+      if (synced) {
+        const currentTrack = AUDIO_CATALOG.find(t => t.id === state.currentTrackId);
+        const currentExistsInRelease = currentTrack && GITHUB_CONFIG.resolvedAssetsMap[normalizeKey(currentTrack.githubAsset)];
+        if (!currentExistsInRelease) {
+          const firstAvailable = AUDIO_CATALOG.find(t => GITHUB_CONFIG.resolvedAssetsMap[normalizeKey(t.githubAsset)]);
+          if (firstAvailable) {
+            state.currentTrackId = firstAvailable.id;
+          }
+        }
+        showToast(`Release ${GITHUB_CONFIG.releaseTag} conectado!`, '✅');
+      }
+      loadTrack(state.currentTrackId, false);
+    });
+  </script>
+</body>
+</html>
