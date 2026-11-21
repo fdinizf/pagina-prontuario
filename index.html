@@ -41,18 +41,30 @@
       const $=id=>document.getElementById(id),audio=$('audio'),search=$('search'),list=$('list'),status=$('status');
       let tracks=[],current=-1,favoriteFilter=false,continuous=false,lastProgressUpdate=0;
 
-      const safeRead=(key,fallback)=>{try{const value=localStorage.getItem(key);return value===null?fallback:JSON.parse(value)}catch(error){console.warn(`Falha lendo ${key}`,error);return fallback}};
-      const safeWrite=(key,value)=>{try{localStorage.setItem(key,JSON.stringify(value));return true}catch(error){console.warn(`Falha salvando ${key}`,error);return false}};
+      const storageAvailable=(()=>{try{const test='__prontuario_storage_test__';localStorage.setItem(test,'1');localStorage.removeItem(test);return true}catch(error){console.warn('localStorage indisponível:',error);return false}})();
+      const safeRead=(key,fallback)=>{if(!storageAvailable)return fallback;try{const value=localStorage.getItem(key);if(value===null)return fallback;const parsed=JSON.parse(value);return parsed}catch(error){console.warn(`Falha lendo ${key}; dados inválidos foram ignorados`,error);return fallback}};
+      const safeWrite=(key,value)=>{if(!storageAvailable)return false;try{localStorage.setItem(key,JSON.stringify(value));return true}catch(error){console.warn(`Falha salvando ${key}; o armazenamento pode estar cheio ou bloqueado`,error);return false}};
       const arrayOrFallback=(key,fallback=[])=>{const value=safeRead(key,fallback);return Array.isArray(value)?value:fallback};
       const objectOrFallback=(key,fallback={})=>{const value=safeRead(key,fallback);return value&&typeof value==='object'&&!Array.isArray(value)?value:fallback};
 
-      const favorites=new Set(arrayOrFallback('prontuario:favorites').filter(value=>typeof value==='string')); 
-      const heard=new Set(arrayOrFallback('prontuario:heard').filter(value=>typeof value==='string')); 
-      let bookmarks=objectOrFallback('prontuario:bookmarks');
-      let history=arrayOrFallback('prontuario:history').filter(item=>item&&typeof item.key==='string').slice(0,30);
+      function sanitizeStringArray(values){if(!Array.isArray(values))return [];const seen=new Set(),safe=[];for(const value of values){if(typeof value==='string'){const key=value.trim();if(key&&key.length<=500&&!seen.has(key)){seen.add(key);safe.push(key)}}}return safe}
 
-      if(!history.every(item=>typeof item.playedAt==='string'))history=[];
-      for(const key of Object.keys(bookmarks)){if(!Array.isArray(bookmarks[key]))delete bookmarks[key];else bookmarks[key]=bookmarks[key].filter(item=>item&&typeof item.id==='string'&&typeof item.text==='string'&&typeof item.time==='number'&&Number.isFinite(item.time)&&item.time>=0)}
+      function sanitizeHistory(values){if(!Array.isArray(values))return [];const seen=new Set(),safe=[];for(const item of values){if(!item||typeof item!==='object'||Array.isArray(item))continue;if(typeof item.key!=='string'||!item.key.trim()||item.key.length>500)continue;if(typeof item.playedAt!=='string')continue;const date=new Date(item.playedAt);if(Number.isNaN(date.valueOf()))continue;if(seen.has(item.key))continue;seen.add(item.key);safe.push({key:item.key.trim(),playedAt:date.toISOString()})}return safe.slice(0,30)}
+
+      function sanitizeBookmarks(value){if(!value||typeof value!=='object'||Array.isArray(value))return {};const safe={};for(const [key,items] of Object.entries(value)){if(typeof key!=='string'||!key.trim()||key.length>500||!Array.isArray(items))continue;const seen=new Set(),clean=[];for(const item of items){if(!item||typeof item!==='object'||Array.isArray(item))continue;if(typeof item.id!=='string'||!item.id.trim()||item.id.length>100)continue;if(typeof item.text!=='string')continue;if(typeof item.time!=='number'||!Number.isFinite(item.time)||item.time<0)continue;const text=item.text.trim().slice(0,50);if(!text||seen.has(item.id))continue;seen.add(item.id);clean.push({id:item.id,time:item.time,text})}if(clean.length)safe[key.trim()]=clean.slice(0,100)}return safe}
+
+      const favorites=new Set(sanitizeStringArray(arrayOrFallback('prontuario:favorites')));
+      const heard=new Set(sanitizeStringArray(arrayOrFallback('prontuario:heard')));
+      let bookmarks=sanitizeBookmarks(objectOrFallback('prontuario:bookmarks'));
+      let history=sanitizeHistory(arrayOrFallback('prontuario:history'));
+
+      const theme=safeRead('prontuario:theme','dark');
+      if(theme==='light')document.body.classList.add('light');
+
+      safeWrite('prontuario:favorites',[...favorites]);
+      safeWrite('prontuario:heard',[...heard]);
+      safeWrite('prontuario:bookmarks',bookmarks);
+      safeWrite('prontuario:history',history);
 
       const openModules=new Set(),openSubmodules=new Set();
       const fmt=sec=>Number.isFinite(sec)&&sec>=0?`${Math.floor(sec/60)}:${String(Math.floor(sec%60)).padStart(2,'0')}`:'0:00';
@@ -67,32 +79,11 @@
         return value;
       }
 
-      function validAudioURL(value){
-        try{
-          const url=new URL(value);
-          const allowed=new Set(['github.com','objects.githubusercontent.com','release-assets.githubusercontent.com','raw.githubusercontent.com']);
-          return (url.protocol==='https:'||url.protocol==='http:')&&allowed.has(url.hostname);
-        }catch{return false}
-      }
-
+      function validAudioURL(value){try{const url=new URL(value);const allowed=new Set(['github.com','objects.githubusercontent.com','release-assets.githubusercontent.com','raw.githubusercontent.com']);return (url.protocol==='https:'||url.protocol==='http:')&&allowed.has(url.hostname)}catch{return false}}
       function compileRule(match){try{return new RegExp(match,'i')}catch(error){console.warn('Regra inválida ignorada:',match,error);return null}}
-
-      function classify(assetName,catalog){
-        for(const item of catalog.rules||[]){
-          const regex=compileRule(item.match);
-          if(regex&&regex.test(assetName))return {top:item.module||'Outros',sub:item.submodule||'Outros áudios',complex:item.complex||''};
-        }
-        return {top:'Outros',sub:'Outros áudios',complex:''};
-      }
-
+      function classify(assetName,catalog){for(const item of catalog.rules||[]){const regex=compileRule(item.match);if(regex&&regex.test(assetName))return {top:item.module||'Outros',sub:item.submodule||'Outros áudios',complex:item.complex||''}}return {top:'Outros',sub:'Outros áudios',complex:''}}
       function titleFromFilename(file){return file.replace(/\.m4a$/i,'').replace(/[._-]+/g,' ').replace(/\s+/g,' ').trim().replace(/Intoxicacao/gi,'Intoxicação').replace(/Diagnostico/gi,'Diagnóstico').replace(/Hansenese/gi,'Hanseníase').replace(/Fisiopatologia/gi,'Fisiopatologia').replace(/Doencas exantematicas da infancia/gi,'Doenças exantemáticas da infância').replace(/Bulimia/gi,'Bulimia').replace(/Sindrome metabolica/gi,'Síndrome metabólica').replace(/compulsao alimentar/gi,'Compulsão alimentar').replace(/Bronquiolite em crianca/gi,'Bronquiolite em criança')}
-
-      function makeTrack(asset,catalog){
-        const category=classify(asset.name,catalog);
-        const catalogTitle=catalog.titles?.[asset.name];
-        const name=typeof catalogTitle==='string'&&catalogTitle.trim()?catalogTitle.trim():titleFromFilename(asset.name);
-        return {key:asset.name,name,url:asset.browser_download_url,top:category.top,sub:category.sub,complex:category.complex,searchText:normalize(`${name} ${category.top} ${category.sub} ${category.complex}`)};
-      }
+      function makeTrack(asset,catalog){const category=classify(asset.name,catalog);const catalogTitle=catalog.titles?.[asset.name];const name=typeof catalogTitle==='string'&&catalogTitle.trim()?catalogTitle.trim():titleFromFilename(asset.name);return {key:asset.name,name,url:asset.browser_download_url,top:category.top,sub:category.sub,complex:category.complex,searchText:normalize(`${name} ${category.top} ${category.sub} ${category.complex}`)}}
 
       function renderBookmarks(){const holder=$('bookmarkList'),episode=$('bookmarkEpisode');holder.replaceChildren();if(current<0){episode.textContent='Selecione um episódio para ver suas marcações.';return}const track=tracks[current];episode.textContent=track.name;const items=bookmarks[track.key]||[];if(!items.length){const empty=document.createElement('div');empty.className='empty-state';empty.textContent='Nenhuma marcação neste episódio.';holder.append(empty);return}for(const item of [...items].sort((a,b)=>a.time-b.time)){const row=document.createElement('div');row.className='bookmark-row';const jump=document.createElement('button');jump.type='button';jump.className='bookmark-jump';jump.textContent=fmt(item.time);jump.title='Ir para esta minutagem';jump.addEventListener('click',()=>{if(!Number.isFinite(audio.duration))return;audio.currentTime=Math.max(0,Math.min(audio.duration,item.time));audio.play().catch(showPlaybackError)});const text=document.createElement('span');text.className='bookmark-text';text.textContent=item.text;const del=document.createElement('button');del.type='button';del.className='bookmark-delete';del.textContent='×';del.title='Excluir comentário';del.setAttribute('aria-label',`Excluir comentário ${item.text}`);del.addEventListener('click',()=>{bookmarks[track.key]=items.filter(mark=>mark.id!==item.id);safeWrite('prontuario:bookmarks',bookmarks);renderBookmarks()});row.append(jump,text,del);holder.append(row)}}
 
@@ -102,13 +93,11 @@
       function render(){const q=normalize(search.value.trim()),visible=tracks.map((track,index)=>({...track,index})).filter(track=>track.searchText.includes(q)&&(!favoriteFilter||favorites.has(track.key)));list.replaceChildren();$('episodeCount').textContent=`${visible.length} episódio${visible.length===1?'':'s'}`;if(!visible.length){status.hidden=false;status.className='status';status.textContent=tracks.length?'Nenhum episódio encontrado.':'Nenhum áudio disponível.';return}status.hidden=true;const groups=new Map();for(const track of visible){if(!groups.has(track.top))groups.set(track.top,[]);groups.get(track.top).push(track)}const moduleOrder=catalog?.modules||['HMEC (Emergências Clínicas)','TOCE (Clínica Cirúrgica e Trauma)','PMSUS (Atenção Primária e Ambulatório)','NCS','Outros'];const order=[...moduleOrder,...[...groups.keys()].filter(key=>!moduleOrder.includes(key))];for(const top of order){if(!groups.has(top))continue;const module=document.createElement('details');module.className='module';module.open=Boolean(q)||openModules.has(top);if(current>=0&&tracks[current].top===top)module.classList.add('active-module');module.addEventListener('toggle',()=>module.open?openModules.add(top):openModules.delete(top));const summary=document.createElement('summary'),moduleName=document.createElement('span'),count=document.createElement('span');moduleName.textContent=top;count.className='module-count';count.textContent=`${groups.get(top).length} episódio${groups.get(top).length===1?'':'s'}`;summary.append(moduleName,count);module.append(summary);const subgroups=new Map();for(const track of groups.get(top)){const key=top==='NCS'?`${track.complex||''}|||${track.sub}`:track.sub;if(!subgroups.has(key))subgroups.set(key,[]);subgroups.get(key).push(track)}for(const [groupKey,items] of subgroups){const [complex,sub]=top==='NCS'?groupKey.split('|||'):['',groupKey];const section=document.createElement('details');section.className='submodule';const stateKey=`${top}|||${complex}|||${sub}`;section.open=Boolean(q)||openSubmodules.has(stateKey);section.addEventListener('toggle',()=>section.open?openSubmodules.add(stateKey):openSubmodules.delete(stateKey));const subSummary=document.createElement('summary'),subName=document.createElement('span'),subCount=document.createElement('span');subName.textContent=top==='NCS'?`${complex} · ${sub}`:sub;subCount.className='submodule-count';subCount.textContent=`${items.length} episódio${items.length===1?'':'s'}`;subSummary.append(subName,subCount);section.append(subSummary);for(const track of items){const row=document.createElement('div');row.className=`audio-row${current===track.index&&!audio.paused?' is-playing':''}`;const play=document.createElement('button');play.type='button';play.className='episode-play';play.textContent=current===track.index&&!audio.paused?'⏸':'▶';play.setAttribute('aria-label',`${current===track.index&&!audio.paused?'Pausar':'Reproduzir'} ${track.name}`);play.addEventListener('click',()=>current===track.index&&!audio.paused?audio.pause():playTrack(track.index));const title=document.createElement('button');title.type='button';title.className=`episode-title${current===track.index?' current':''}`;title.textContent=track.name;title.addEventListener('click',()=>playTrack(track.index));const label=document.createElement('label');label.className='heard';const check=document.createElement('input');check.type='checkbox';check.checked=heard.has(track.key);check.setAttribute('aria-label',`Marcar ${track.name} como ouvido`);check.addEventListener('change',()=>{check.checked?heard.add(track.key):heard.delete(track.key);safeWrite('prontuario:heard',[...heard])});label.append(check,document.createTextNode(' Ouvido'));const fav=document.createElement('button');fav.type='button';fav.className=`fav${favorites.has(track.key)?' active':''}`;fav.textContent=favorites.has(track.key)?'♥':'♡';fav.setAttribute('aria-label',`Favoritar ${track.name}`);fav.addEventListener('click',()=>{favorites.has(track.key)?favorites.delete(track.key):favorites.add(track.key);safeWrite('prontuario:favorites',[...favorites]);render()});row.append(play,title,label,fav);section.append(row)}module.append(section)}list.append(module)}}
 
       function showPlaybackError(error){console.error('Falha ao reproduzir áudio:',error);$('nowPlaying').textContent='Não foi possível reproduzir este áudio. Verifique a conexão e tente novamente.'}
-
-      function playTrack(index){if(index<0||index>=tracks.length)return;current=index;const track=tracks[index];if(!validAudioURL(track.url)){showPlaybackError(new Error('URL de áudio inválida'));return}openModules.add(track.top);openSubmodules.add(`${track.top}|||${track.complex}|||${track.sub}`);audio.src=track.url;$('nowPlaying').textContent=`Reproduzindo: ${track.name}`;$('duration').textContent='0:00';$('currentTime').textContent='0:00';$('bookmarkTimestamp').textContent='0:00';$('seek').value=0;$('seek').style.setProperty('--progress','0%');$('pig').style.left='0%';history=[{key:track.key,playedAt:new Date().toISOString()},...history.filter(item=>item.key!==track.key)].slice(0,30);safeWrite('prontuario:history',history);renderHistory();renderBookmarks();audio.playbackRate=Number($('speed').value)||1;render();audio.play().catch(showPlaybackError)}
-
+      function playTrack(index){if(index<0||index>=tracks.length)return;current=index;const track=tracks[index];if(!validAudioURL(track.url)){showPlaybackError(new Error('URL de áudio inválida'));return}openModules.add(track.top);openSubmodules.add(`${track.top}|||${track.complex}|||${track.sub}`);audio.src=track.url;$('nowPlaying').textContent=`Reproduzindo: ${track.name}`;$('duration').textContent='0:00';$('currentTime').textContent='0:00';$('bookmarkTimestamp').textContent='0:00';$('seek').value=0;$('seek').style.setProperty('--progress','0%');$('pig').style.left='0%';history=sanitizeHistory([{key:track.key,playedAt:new Date().toISOString()},...history]);safeWrite('prontuario:history',history);renderHistory();renderBookmarks();audio.playbackRate=Number($('speed').value)||1;render();audio.play().catch(showPlaybackError)}
       function skip(seconds){if(Number.isFinite(audio.duration))audio.currentTime=Math.max(0,Math.min(audio.duration,audio.currentTime+seconds))}
 
       $('bookmarkText').addEventListener('input',event=>$('charCount').textContent=`${event.target.value.length}/50`);
-      $('bookmarkForm').addEventListener('submit',event=>{event.preventDefault();if(current<0||!Number.isFinite(audio.currentTime))return;const text=$('bookmarkText').value.trim().slice(0,50);if(!text)return;const key=tracks[current].key;bookmarks[key]??=[];bookmarks[key].push({id:String(Date.now()),time:audio.currentTime,text});safeWrite('prontuario:bookmarks',bookmarks);event.target.reset();$('charCount').textContent='0/50';renderBookmarks()});
+      $('bookmarkForm').addEventListener('submit',event=>{event.preventDefault();if(current<0||!Number.isFinite(audio.currentTime))return;const text=$('bookmarkText').value.trim().slice(0,50);if(!text)return;const key=tracks[current].key;bookmarks[key]??=[];bookmarks[key].push({id:String(Date.now()),time:audio.currentTime,text});bookmarks=sanitizeBookmarks(bookmarks);safeWrite('prontuario:bookmarks',bookmarks);event.target.reset();$('charCount').textContent='0/50';renderBookmarks()});
 
       $('playPause').addEventListener('click',()=>{if(current<0){if(tracks.length)playTrack(0)}else if(audio.paused)audio.play().catch(showPlaybackError);else audio.pause()});
       audio.addEventListener('play',()=>{$('playPause').textContent='⏸';$('playPause').setAttribute('aria-label','Pausar');$('playPause').title='Pausar';render()});
@@ -119,31 +108,11 @@
       $('seek').addEventListener('input',event=>{const progress=Number(event.target.value)/10;event.target.style.setProperty('--progress',`${progress}%`);$('pig').style.left=`${progress}%`;if(audio.duration)audio.currentTime=progress/100*audio.duration});
       $('back10').addEventListener('click',()=>skip(-10));$('forward30').addEventListener('click',()=>skip(30));$('previous').addEventListener('click',()=>{if(current>0)playTrack(current-1)});$('next').addEventListener('click',()=>{if(current+1<tracks.length)playTrack(current+1)});
       audio.addEventListener('ended',()=>{if(current>=0){heard.add(tracks[current].key);safeWrite('prontuario:heard',[...heard]);render()}if(continuous&&current+1<tracks.length)playTrack(current+1);else if(continuous&&tracks.length)playTrack(0)});
-      $('continuous').addEventListener('click',event=>{continuous=!continuous;event.currentTarget.setAttribute('aria-pressed',String(continuous));event.currentTarget.textContent=continuous?'🔁 Contínuo: sim':'🔁 Contínuo: não'});$('speed').addEventListener('change',event=>audio.playbackRate=Number(event.target.value));$('volume').addEventListener('input',event=>audio.volume=Number(event.target.value));search.addEventListener('input',render);$('favoritesOnly').addEventListener('click',event=>{favoriteFilter=!favoriteFilter;event.currentTarget.setAttribute('aria-pressed',String(favoriteFilter));event.currentTarget.textContent=favoriteFilter?'★ Todos':'☆ Favoritos';render()});$('theme').addEventListener('click',()=>{document.body.classList.toggle('light');safeWrite('prontuario:theme',document.body.classList.contains('light')?'light':'dark')});if(safeRead('prontuario:theme','dark')==='light')document.body.classList.add('light');
+      $('continuous').addEventListener('click',event=>{continuous=!continuous;event.currentTarget.setAttribute('aria-pressed',String(continuous));event.currentTarget.textContent=continuous?'🔁 Contínuo: sim':'🔁 Contínuo: não'});$('speed').addEventListener('change',event=>audio.playbackRate=Number(event.target.value));$('volume').addEventListener('input',event=>audio.volume=Number(event.target.value));search.addEventListener('input',render);$('favoritesOnly').addEventListener('click',event=>{favoriteFilter=!favoriteFilter;event.currentTarget.setAttribute('aria-pressed',String(favoriteFilter));event.currentTarget.textContent=favoriteFilter?'★ Todos':'☆ Favoritos';render()});$('theme').addEventListener('click',()=>{document.body.classList.toggle('light');safeWrite('prontuario:theme',document.body.classList.contains('light')?'light':'dark')});
 
-      async function fetchJSON(url,options={}){
-        let response;
-        try{response=await fetch(url,options)}catch(error){throw Error('Falha de rede ao carregar os dados')}
-        if(response.status===403||response.status===429)throw Error('Limite de acesso do GitHub atingido. Tente novamente mais tarde');
-        if(!response.ok)throw Error(`HTTP ${response.status}`);
-        try{return await response.json()}catch(error){throw Error('Resposta recebida não é um JSON válido')}
-      }
+      async function fetchJSON(url,options={}){let response;try{response=await fetch(url,options)}catch(error){throw Error('Falha de rede ao carregar os dados')}if(response.status===403||response.status===429)throw Error('Limite de acesso do GitHub atingido. Tente novamente mais tarde');if(!response.ok)throw Error(`HTTP ${response.status}`);try{return await response.json()}catch(error){throw Error('Resposta recebida não é um JSON válido')}}
 
-      Promise.allSettled([
-        fetchJSON(RELEASE_API,{headers:{Accept:'application/vnd.github+json'},cache:'no-store'}),
-        fetchJSON(CATALOG_URL,{cache:'no-store'}).then(validateCatalog)
-      ]).then(([releaseResult,catalogResult])=>{
-        let loadedCatalog={modules:['Outros'],rules:[],titles:{}};
-        if(catalogResult.status==='fulfilled')loadedCatalog=catalogResult.value;else console.warn('Catálogo indisponível:',catalogResult.reason);catalog=loadedCatalog;
-        if(releaseResult.status==='rejected'){status.hidden=false;status.className='status error';status.textContent=`Não foi possível carregar os episódios: ${releaseResult.reason.message}.`;return}
-        const release=releaseResult.value;
-        if(!release||!Array.isArray(release.assets)){status.hidden=false;status.className='status error';status.textContent='A resposta da release não contém uma lista de áudio válida.';return}
-        tracks=release.assets.filter(asset=>asset&&typeof asset.name==='string'&&typeof asset.browser_download_url==='string'&&validAudioURL(asset.browser_download_url)&&/\.(m4a|mp3|ogg|wav)$/i.test(asset.name)).map(asset=>makeTrack(asset,loadedCatalog));
-        tracks.sort((a,b)=>{const moduleOrder=loadedCatalog.modules,aIndex=moduleOrder.indexOf(a.top),bIndex=moduleOrder.indexOf(b.top);return(aIndex<0?999:aIndex)-(bIndex<0?999:bIndex)||a.complex.localeCompare(b.complex,'pt-BR')||a.sub.localeCompare(b.sub,'pt-BR')||a.name.localeCompare(b.name,'pt-BR')});
-        render();renderHistory();renderBookmarks();
-        if(!tracks.length){status.hidden=false;status.className='status error';status.textContent='Nenhum arquivo de áudio compatível foi encontrado nesta release.'}
-        else if(catalogResult.status==='rejected'){status.hidden=false;status.className='status';status.textContent='Catálogo indisponível; os episódios serão organizados por nome.'}
-      });
+      Promise.allSettled([fetchJSON(RELEASE_API,{headers:{Accept:'application/vnd.github+json'},cache:'no-store'}),fetchJSON(CATALOG_URL,{cache:'no-store'}).then(validateCatalog)]).then(([releaseResult,catalogResult])=>{let loadedCatalog={modules:['Outros'],rules:[],titles:{}};if(catalogResult.status==='fulfilled')loadedCatalog=catalogResult.value;else console.warn('Catálogo indisponível:',catalogResult.reason);catalog=loadedCatalog;if(releaseResult.status==='rejected'){status.hidden=false;status.className='status error';status.textContent=`Não foi possível carregar os episódios: ${releaseResult.reason.message}.`;return}const release=releaseResult.value;if(!release||!Array.isArray(release.assets)){status.hidden=false;status.className='status error';status.textContent='A resposta da release não contém uma lista de áudio válida.';return}tracks=release.assets.filter(asset=>asset&&typeof asset.name==='string'&&typeof asset.browser_download_url==='string'&&validAudioURL(asset.browser_download_url)&&/\.(m4a|mp3|ogg|wav)$/i.test(asset.name)).map(asset=>makeTrack(asset,loadedCatalog));tracks.sort((a,b)=>{const moduleOrder=loadedCatalog.modules,aIndex=moduleOrder.indexOf(a.top),bIndex=moduleOrder.indexOf(b.top);return(aIndex<0?999:aIndex)-(bIndex<0?999:bIndex)||a.complex.localeCompare(b.complex,'pt-BR')||a.sub.localeCompare(b.sub,'pt-BR')||a.name.localeCompare(b.name,'pt-BR')});render();renderHistory();renderBookmarks();if(!tracks.length){status.hidden=false;status.className='status error';status.textContent='Nenhum arquivo de áudio compatível foi encontrado nesta release.'}else if(catalogResult.status==='rejected'){status.hidden=false;status.className='status';status.textContent='Catálogo indisponível; os episódios serão organizados por nome.'}});
     })();
   </script>
 </body>
