@@ -9,7 +9,7 @@
     "Outros"
   ],
   "rules": [
-    {"match":"^(HMEC\\.-\\.(BLS|ACLS))|farmacologia_da_parada|cuidados\\.pos-pcr|salvando\\.cerebro|obstrucao\\.de\\.vias","module":"HMEC (Emergências Clínicas)","submodule":"Parada Cardiorrespiratória (BLS / ACLS AHA 2025)"},
+    {"match":"^(HMEC\\.-\\.(BLS|ACLS))|farmacologia_da_parada|cuidados\\.pos-pcr|salvando\\.cerebro|obstrucao\\.de\\.vias","module":"HMEC (Emergências Clínicas)","submodule":"Parada Cardiorrespiratória"},
     {"match":"sepse","module":"HMEC (Emergências Clínicas)","submodule":"Sepse"},
     {"match":"^IAM\\.","module":"HMEC (Emergências Clínicas)","submodule":"Cardiologia (Consenso ESC IAM 2026)"},
     {"match":"sindromes\\.hipertensivas\\.na\\.gestacao","module":"HMEC (Emergências Clínicas)","submodule":"Emergências Obstétricas (Síndromes Hipertensivas)"},
@@ -38,7 +38,8 @@
     {"match":"^NCS\\.-\\.SP\\.2\\.4","module":"NCS","complex":"NCS complexo 2","submodule":"SP 2.4 – Síndrome dos Ovários Policísticos (SOP)"},
     {"match":"^(NCS\\.-\\.)?SP\\.3\\.1","module":"NCS","complex":"NCS complexo 3","submodule":"SP 3.1 – Dermatologia Infecciosa (Herpes Zoster e Hanseníase)"},
     {"match":"^(NCS\\.-\\.)?SP\\.3\\.2","module":"NCS","complex":"NCS complexo 3","submodule":"SP 3.2 – Doenças Exantemáticas na Infância"},
-    {"match":"^(NCS\\.-\\.)?SP\\.3\\.3","module":"NCS","complex":"NCS complexo 3","submodule":"Reumatologia (Lúpus Eritematoso Sistêmico)"}
+    {"match":"^(NCS\\.-\\.)?SP\\.3\\.3","module":"NCS","complex":"NCS complexo 3","submodule":"Reumatologia (Lúpus Eritematoso Sistêmico)"},
+    {"match":"^(NCS\\.-\\.)?SP\\.3\\.4","module":"NCS","complex":"NCS complexo 3","submodule":"SP 3.4 – Psoríase"}
   ],
   "titles": {
     "HMEC.-.Cuidados.pos-PCR.m4a": "Cuidados pós-PCR",
@@ -56,6 +57,9 @@
     "NCS.-.SP.2.3.-.Bulimina.nervosa.m4a": "Bulimia nervosa",
     "NCS.-.SP.2.3.-.compulsao.alimentar.m4a": "Compulsão alimentar",
     "NCS.-.SP.2.3.-.Sindrome.metabolica.m4a": "Síndrome metabólica",
-    "Epilepsia.PCDT.m4a": "Epilepsia — PCDT"
+    "Epilepsia.PCDT.m4a": "Epilepsia — PCDT",
+    "SP 3.4 - Psoríase pt 1.m4a": "SP 3.4 – Psoríase — parte 1",
+    "SP 3.4 - Psoríase pt 2.m4a": "SP 3.4 – Psoríase — parte 2",
+    "SP 3.4 - Psoríase pt 3.m4a": "SP 3.4 – Psoríase — parte 3"
   }
 }
