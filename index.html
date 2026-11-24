@@ -4,10 +4,10 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#24151f">
-  <title>Carregando R.A.P.I.D.I.M…</title>
+  <title>R.A.P.I.D.I.M</title>
 </head>
 <body>
-  <p style="font:16px system-ui,sans-serif;padding:1rem">Carregando o prontuário…</p>
+  <p id="loadMessage" style="font:16px system-ui,sans-serif;padding:1rem">Carregando o prontuário…</p>
   <script>
     (async()=>{
       const source='https://raw.githubusercontent.com/fdinizf/pagina-prontuario/947733664674764d2949381926022e89e178e07a/index.html';
@@ -15,16 +15,32 @@
         const response=await fetch(source,{cache:'no-store'});
         if(!response.ok)throw Error('HTTP '+response.status);
         let html=await response.text();
-        const mobileStyles=`\n    @media(max-width:650px){body{padding-bottom:155px}header{padding:.35rem .7rem}.header-inner{gap:.4rem}.brand{min-width:0}h1{font-size:1.15rem}.tagline{display:none}.toolbar{width:100%;gap:.35rem;flex-wrap:nowrap}.toolbar input{flex:1;min-width:0;width:auto;padding:.45rem .7rem}.toolbar .btn{min-height:36px;padding:.35rem .55rem}.toolbar .round-btn{width:36px;height:36px;min-height:36px}.player{padding:.6rem}.player.is-collapsed .times,.player.is-collapsed .controls>:not(#playPause),.player.is-collapsed .bookmark-form{display:none}.player.is-collapsed .now{font-size:.85rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-right:5rem;margin-bottom:.1rem}.player.is-collapsed .seek-wrap{height:20px;margin:0 .4rem}.player.is-collapsed .controls{margin:0}.player.is-collapsed #playPause{width:42px;height:42px;min-height:42px;font-size:1.1rem}.player-toggle{position:absolute;right:.7rem;top:.55rem;z-index:2;min-height:32px;padding:.2rem .55rem;border-radius:999px;border:1px solid var(--accent);background:var(--control);color:var(--text);font-size:.75rem}.player-toggle[hidden]{display:none}}`;
-        html=html.replace('</style>',mobileStyles+'\n  </style>');
+        const css='\n@media(max-width:650px){body{padding-bottom:155px}header{padding:.35rem .7rem}.header-inner{gap:.4rem}.brand{min-width:0}h1{font-size:1.15rem}.tagline{display:none}.toolbar{width:100%;gap:.35rem;flex-wrap:nowrap}.toolbar input{flex:1;min-width:0;width:auto;padding:.45rem .7rem}.toolbar .btn{min-height:36px;padding:.35rem .55rem}.toolbar .round-btn{width:36px;height:36px;min-height:36px}.player{padding:.6rem}.player.is-collapsed .times,.player.is-collapsed .controls>:not(#playPause),.player.is-collapsed .bookmark-form{display:none}.player.is-collapsed .now{font-size:.85rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-right:5rem;margin-bottom:.1rem}.player.is-collapsed .seek-wrap{height:20px;margin:0 .4rem}.player.is-collapsed .controls{margin:0}.player.is-collapsed #playPause{width:42px;height:42px;min-height:42px;font-size:1.1rem}.player-toggle{position:absolute;right:.7rem;top:.55rem;z-index:2;min-height:32px;padding:.2rem .55rem;border-radius:999px;border:1px solid var(--accent);background:var(--control);color:var(--text);font-size:.75rem}.player-toggle[hidden]{display:none}}';
+        html=html.replace('</style>',css+'\n</style>');
         html=html.replace(/(<p class="now" id="nowPlaying">[\s\S]*?<\/p>)/,'$1<button class="player-toggle" id="playerToggle" type="button" aria-expanded="false" aria-controls="playerDetails" hidden>Expandir</button>');
         html=html.replace('<div class="times">','<div id="playerDetails"><div class="times">');
-        html=html.replace('<form class="bookmark-form"','<form class="bookmark-form"');
-        html=html.replace('</form>\n  </section>','</form></div>\n  </section>');
-        const behavior=`<script>(()=>{const player=document.querySelector('.player'),button=document.getElementById('playerToggle'),mobile=matchMedia('(max-width:650px)');function sync(){if(mobile.matches){player.classList.add('is-collapsed');button.hidden=false;button.setAttribute('aria-expanded','false');button.textContent='Expandir'}else{player.classList.remove('is-collapsed');button.hidden=true}}button.addEventListener('click',()=>{const expanded=player.classList.toggle('is-collapsed')===false;button.setAttribute('aria-expanded',String(expanded));button.textContent=expanded?'Recolher':'Expandir'});mobile.addEventListener('change',sync);sync()})();</script>`;
-        html=html.replace('</body>',behavior+'\n</body>');
-        document.open();document.write(html);document.close();
-      }catch(error){document.body.innerHTML='<p style="font:16px system-ui,sans-serif;padding:1rem">Não foi possível carregar o prontuário. Verifique a conexão e tente novamente.</p>';console.error(error)}
+        html=html.replace(/(<form class="bookmark-form" id="bookmarkForm">[\s\S]*?<\/form>)\s*(<\/section>\s*<script>)/,'$1</div>\n  $2');
+        document.open();
+        document.write(html);
+        document.close();
+        const player=document.querySelector('.player');
+        const toggle=document.getElementById('playerToggle');
+        const mobile=window.matchMedia('(max-width:650px)');
+        function syncPlayer(){
+          if(mobile.matches){player.classList.add('is-collapsed');toggle.hidden=false;toggle.setAttribute('aria-expanded','false');toggle.textContent='Expandir'}
+          else{player.classList.remove('is-collapsed');toggle.hidden=true;toggle.setAttribute('aria-expanded','true')}
+        }
+        toggle.addEventListener('click',()=>{
+          const expanded=player.classList.toggle('is-collapsed')===false;
+          toggle.setAttribute('aria-expanded',String(expanded));
+          toggle.textContent=expanded?'Recolher':'Expandir';
+        });
+        mobile.addEventListener('change',syncPlayer);
+        syncPlayer();
+      }catch(error){
+        document.body.innerHTML='<p style="font:16px system-ui,sans-serif;padding:1rem">Não foi possível carregar o prontuário. Verifique a conexão e tente novamente.</p>';
+        console.error('Falha ao carregar o prontuário:',error);
+      }
     })();
   </script>
 </body>
