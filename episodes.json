@@ -11,6 +11,7 @@
   "rules": [
     {"match":"^(HMEC\\.-\\.(BLS|ACLS))|farmacologia_da_parada|cuidados\\.pos-pcr|salvando\\.cerebro|obstrucao\\.de\\.vias","module":"HMEC (Emergências Clínicas)","submodule":"Parada Cardiorrespiratória"},
     {"match":"sepse","module":"HMEC (Emergências Clínicas)","submodule":"Sepse"},
+    {"match":"^Diretriz Brasileira de SCA 2025 - pt [12]\\.m4a$","module":"HMEC (Emergências Clínicas)","submodule":"Cardiologia"},
     {"match":"^IAM\\.","module":"HMEC (Emergências Clínicas)","submodule":"Cardiologia (Consenso ESC IAM 2026)"},
     {"match":"sindromes\\.hipertensivas\\.na\\.gestacao","module":"HMEC (Emergências Clínicas)","submodule":"Emergências Obstétricas (Síndromes Hipertensivas)"},
     {"match":"intoxic|abordagem\\.geral\\.das\\.intoxic","module":"HMEC (Emergências Clínicas)","submodule":"Toxicologia (Intoxicações Exógenas)"},
@@ -60,6 +61,8 @@
     "Epilepsia.PCDT.m4a": "Epilepsia — PCDT",
     "SP 3.4 - Psoríase pt 1.m4a": "SP 3.4 – Psoríase — parte 1",
     "SP 3.4 - Psoríase pt 2.m4a": "SP 3.4 – Psoríase — parte 2",
-    "SP 3.4 - Psoríase pt 3.m4a": "SP 3.4 – Psoríase — parte 3"
+    "SP 3.4 - Psoríase pt 3.m4a": "SP 3.4 – Psoríase — parte 3",
+    "Diretriz Brasileira de SCA 2025 - pt 1.m4a": "Diretriz Brasileira de SCA 2025 — parte 1",
+    "Diretriz Brasileira de SCA 2025 - pt 2.m4a": "Diretriz Brasileira de SCA 2025 — parte 2"
   }
 }
