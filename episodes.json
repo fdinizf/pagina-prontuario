@@ -12,7 +12,7 @@
     {"match":"^(HMEC\\.-\\.(BLS|ACLS))|farmacologia_da_parada|cuidados\\.pos-pcr|salvando\\.cerebro|obstrucao\\.de\\.vias","module":"HMEC (Emergências Clínicas)","submodule":"Parada Cardiorrespiratória"},
     {"match":"sepse","module":"HMEC (Emergências Clínicas)","submodule":"Sepse"},
     {"match":"^Diretriz Brasileira de SCA 2025 - pt [12]\\.m4a$","module":"HMEC (Emergências Clínicas)","submodule":"Cardiologia"},
-    {"match":"^IAM\\.","module":"HMEC (Emergências Clínicas)","submodule":"Cardiologia (Consenso ESC IAM 2026)"},
+    {"match":"^IAM\\.","module":"HMEC (Emergências Clínicas)","submodule":"Cardiologia"},
     {"match":"sindromes\\.hipertensivas\\.na\\.gestacao","module":"HMEC (Emergências Clínicas)","submodule":"Emergências Obstétricas (Síndromes Hipertensivas)"},
     {"match":"intoxic|abordagem\\.geral\\.das\\.intoxic","module":"HMEC (Emergências Clínicas)","submodule":"Toxicologia (Intoxicações Exógenas)"},
     {"match":"crise\\.convulsiva","module":"HMEC (Emergências Clínicas)","submodule":"Neurologia de Emergência"},
